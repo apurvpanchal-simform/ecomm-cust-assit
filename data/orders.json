@@ -1,0 +1,191 @@
+[
+  {
+    "id": "ord-1001",
+    "customer_id": "cust-001",
+    "items": [
+      {
+        "product_id": "prod-e001",
+        "name": "Sony WH-CH520 Wireless Headphones",
+        "quantity": 1,
+        "price": 59.99,
+        "color": "black"
+      }
+    ],
+    "subtotal": 59.99,
+    "shipping_cost": 0.0,
+    "tax": 4.8,
+    "total": 64.79,
+    "status": "delivered",
+    "payment_status": "paid",
+    "payment": {
+      "status": "paid",
+      "method": "visa_4242",
+      "transaction_id": "txn_1001"
+    },
+    "tracking_number": "1Z999AA10123456784",
+    "carrier": "UPS",
+    "shipment": {
+      "tracking_number": "1Z999AA10123456784",
+      "carrier": "UPS",
+      "status": "delivered",
+      "estimated_delivery": "2026-05-08T20:00:00Z",
+      "delivered_at": "2026-05-07T16:24:00Z"
+    },
+    "ordered_at": "2026-05-01T14:12:00Z",
+    "estimated_delivery": "2026-05-08T20:00:00Z",
+    "delivered_at": "2026-05-07T16:24:00Z",
+    "return_eligible": true,
+    "return_deadline": "2026-06-06T23:59:59Z",
+    "notes": "Delivered one day early.",
+    "partition_key": "cust-001"
+  },
+  {
+    "id": "ord-1002",
+    "customer_id": "cust-001",
+    "items": [
+      {
+        "product_id": "prod-s004",
+        "name": "Adidas Ultraboost Light Running Shoes",
+        "quantity": 1,
+        "price": 139.99,
+        "size": "10",
+        "color": "white"
+      }
+    ],
+    "subtotal": 139.99,
+    "shipping_cost": 0.0,
+    "tax": 11.2,
+    "total": 151.19,
+    "status": "in_transit",
+    "payment_status": "paid",
+    "payment": {
+      "status": "paid",
+      "method": "mastercard_4444",
+      "transaction_id": "txn_1002"
+    },
+    "tracking_number": "9400111202555000000001",
+    "carrier": "USPS",
+    "shipment": {
+      "tracking_number": "9400111202555000000001",
+      "carrier": "USPS",
+      "status": "in_transit",
+      "estimated_delivery": "2026-06-02T20:00:00Z"
+    },
+    "ordered_at": "2026-05-28T09:35:00Z",
+    "estimated_delivery": "2026-06-02T20:00:00Z",
+    "return_eligible": true,
+    "return_deadline": "2026-07-02T23:59:59Z",
+    "notes": "Carrier scan shows package departed regional facility.",
+    "partition_key": "cust-001"
+  },
+  {
+    "id": "ord-1003",
+    "customer_id": "cust-002",
+    "items": [
+      {
+        "product_id": "prod-h008",
+        "name": "Ninja Professional Blender",
+        "quantity": 1,
+        "price": 89.99
+      }
+    ],
+    "subtotal": 89.99,
+    "shipping_cost": 7.99,
+    "tax": 7.2,
+    "total": 105.18,
+    "status": "returned",
+    "payment_status": "refunded",
+    "payment": {
+      "status": "refunded",
+      "method": "amex_0005",
+      "transaction_id": "txn_1003",
+      "refunded_amount": 105.18
+    },
+    "tracking_number": "61299990000000000001",
+    "carrier": "FedEx",
+    "shipment": {
+      "tracking_number": "61299990000000000001",
+      "carrier": "FedEx",
+      "status": "returned",
+      "estimated_delivery": "2026-04-20T20:00:00Z",
+      "delivered_at": "2026-04-19T12:08:00Z"
+    },
+    "ordered_at": "2026-04-14T18:45:00Z",
+    "estimated_delivery": "2026-04-20T20:00:00Z",
+    "delivered_at": "2026-04-19T12:08:00Z",
+    "return_eligible": false,
+    "return_deadline": "2026-05-19T23:59:59Z",
+    "notes": "Returned due to damaged pitcher; refund completed.",
+    "partition_key": "cust-002"
+  },
+  {
+    "id": "ord-1004",
+    "customer_id": "cust-003",
+    "items": [
+      {
+        "product_id": "prod-c003",
+        "name": "Levi's 511 Slim Fit Jeans",
+        "quantity": 2,
+        "price": 49.99,
+        "size": "32x32",
+        "color": "dark wash"
+      }
+    ],
+    "subtotal": 99.98,
+    "shipping_cost": 0.0,
+    "tax": 8.0,
+    "total": 107.98,
+    "status": "cancelled",
+    "payment_status": "refunded",
+    "payment": {
+      "status": "refunded",
+      "method": "paypal",
+      "transaction_id": "txn_1004",
+      "refunded_amount": 107.98
+    },
+    "ordered_at": "2026-05-12T10:10:00Z",
+    "return_eligible": false,
+    "notes": "Customer cancelled before fulfillment.",
+    "partition_key": "cust-003"
+  },
+  {
+    "id": "ord-1005",
+    "customer_id": "cust-004",
+    "items": [
+      {
+        "product_id": "prod-a006",
+        "name": "Fossil Derrick Leather Wallet",
+        "quantity": 1,
+        "price": 44.99,
+        "color": "brown"
+      }
+    ],
+    "subtotal": 44.99,
+    "shipping_cost": 5.99,
+    "tax": 3.6,
+    "total": 54.58,
+    "status": "delivered",
+    "payment_status": "paid",
+    "payment": {
+      "status": "paid",
+      "method": "visa_1111",
+      "transaction_id": "txn_1005"
+    },
+    "tracking_number": "TBA315555000001",
+    "carrier": "Amazon Logistics",
+    "shipment": {
+      "tracking_number": "TBA315555000001",
+      "carrier": "Amazon Logistics",
+      "status": "delivered",
+      "estimated_delivery": "2026-05-25T20:00:00Z",
+      "delivered_at": "2026-05-26T19:41:00Z"
+    },
+    "ordered_at": "2026-05-20T07:50:00Z",
+    "estimated_delivery": "2026-05-25T20:00:00Z",
+    "delivered_at": "2026-05-26T19:41:00Z",
+    "return_eligible": true,
+    "return_deadline": "2026-06-25T23:59:59Z",
+    "notes": "Delivered one day late after carrier delay.",
+    "partition_key": "cust-004"
+  }
+]

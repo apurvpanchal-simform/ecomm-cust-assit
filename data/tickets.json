@@ -1,0 +1,3687 @@
+[
+  {
+    "id": "7668c2c2-4bba-4496-b12c-c688e0731396",
+    "customer_id": "cust-001",
+    "created_at": "2026-05-30T04:10:45.834735Z",
+    "updated_at": null,
+    "category": "order",
+    "resolution_text": "Order ord-1001 is currently delivered. Carrier: UPS, tracking: 1Z999AA10123456784.",
+    "confidence_score": 0.86,
+    "requires_human": false,
+    "sentiment_trajectory": [
+      0.0
+    ],
+    "sources": [
+      "orders.json",
+      "return-refund-policy.md"
+    ],
+    "conversation_history": [
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      }
+    ],
+    "status": "auto_resolved",
+    "order_id": "ord-1001",
+    "assigned_agent": null,
+    "notes": null,
+    "partition_key": "cust-001"
+  },
+  {
+    "id": "c9c758fb-922e-4442-ae94-5321659cff6b",
+    "customer_id": "cust-001",
+    "created_at": "2026-05-30T04:10:45.868990Z",
+    "updated_at": null,
+    "category": "order",
+    "resolution_text": "Order ord-1001 is currently delivered. Carrier: UPS, tracking: 1Z999AA10123456784.",
+    "confidence_score": 0.86,
+    "requires_human": false,
+    "sentiment_trajectory": [
+      0.0
+    ],
+    "sources": [
+      "orders.json",
+      "return-refund-policy.md"
+    ],
+    "conversation_history": [
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      }
+    ],
+    "status": "auto_resolved",
+    "order_id": "ord-1001",
+    "assigned_agent": null,
+    "notes": null,
+    "partition_key": "cust-001"
+  },
+  {
+    "id": "8553701a-d938-409f-9e14-1787c1933c6f",
+    "customer_id": "cust-001",
+    "created_at": "2026-05-30T04:10:45.879370Z",
+    "updated_at": null,
+    "category": "order",
+    "resolution_text": "Order ord-1001 is currently delivered. Carrier: UPS, tracking: 1Z999AA10123456784.",
+    "confidence_score": 0.86,
+    "requires_human": false,
+    "sentiment_trajectory": [
+      0.0
+    ],
+    "sources": [
+      "orders.json",
+      "return-refund-policy.md"
+    ],
+    "conversation_history": [
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      }
+    ],
+    "status": "auto_resolved",
+    "order_id": "ord-1001",
+    "assigned_agent": null,
+    "notes": null,
+    "partition_key": "cust-001"
+  },
+  {
+    "id": "4540c2d7-9a54-497d-a2f8-f080c8f1e2ae",
+    "customer_id": "cust-001",
+    "created_at": "2026-05-30T04:13:46.288313Z",
+    "updated_at": null,
+    "category": "order",
+    "resolution_text": "Order ord-1001 is currently delivered. Carrier: UPS, tracking: 1Z999AA10123456784.",
+    "confidence_score": 0.86,
+    "requires_human": false,
+    "sentiment_trajectory": [
+      0.0
+    ],
+    "sources": [
+      "orders.json",
+      "return-refund-policy.md"
+    ],
+    "conversation_history": [
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      }
+    ],
+    "status": "auto_resolved",
+    "order_id": "ord-1001",
+    "assigned_agent": null,
+    "notes": null,
+    "partition_key": "cust-001"
+  },
+  {
+    "id": "6555bde6-1b66-4757-8629-8ca6d304cd68",
+    "customer_id": "cust-001",
+    "created_at": "2026-05-30T04:13:46.322047Z",
+    "updated_at": null,
+    "category": "order",
+    "resolution_text": "Order ord-1001 is currently delivered. Carrier: UPS, tracking: 1Z999AA10123456784.",
+    "confidence_score": 0.86,
+    "requires_human": false,
+    "sentiment_trajectory": [
+      0.0
+    ],
+    "sources": [
+      "orders.json",
+      "return-refund-policy.md"
+    ],
+    "conversation_history": [
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      }
+    ],
+    "status": "auto_resolved",
+    "order_id": "ord-1001",
+    "assigned_agent": null,
+    "notes": null,
+    "partition_key": "cust-001"
+  },
+  {
+    "id": "4ea6cb8e-fdd7-4f5e-b990-250ffd4485d3",
+    "customer_id": "cust-001",
+    "created_at": "2026-05-30T04:13:46.333422Z",
+    "updated_at": null,
+    "category": "order",
+    "resolution_text": "Order ord-1001 is currently delivered. Carrier: UPS, tracking: 1Z999AA10123456784.",
+    "confidence_score": 0.86,
+    "requires_human": false,
+    "sentiment_trajectory": [
+      0.0
+    ],
+    "sources": [
+      "orders.json",
+      "return-refund-policy.md"
+    ],
+    "conversation_history": [
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      }
+    ],
+    "status": "auto_resolved",
+    "order_id": "ord-1001",
+    "assigned_agent": null,
+    "notes": null,
+    "partition_key": "cust-001"
+  },
+  {
+    "id": "87255a30-767c-4f30-b775-92b64690b059",
+    "customer_id": "cust-001",
+    "created_at": "2026-05-30T04:13:46.357167Z",
+    "updated_at": null,
+    "category": "order",
+    "resolution_text": "Order ord-1001 is currently delivered. Carrier: UPS, tracking: 1Z999AA10123456784.",
+    "confidence_score": 0.86,
+    "requires_human": false,
+    "sentiment_trajectory": [
+      0.0
+    ],
+    "sources": [
+      "orders.json",
+      "return-refund-policy.md"
+    ],
+    "conversation_history": [
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      }
+    ],
+    "status": "auto_resolved",
+    "order_id": "ord-1001",
+    "assigned_agent": null,
+    "notes": null,
+    "partition_key": "cust-001"
+  },
+  {
+    "id": "b5d291f2-8ace-4926-a025-a8b50a220932",
+    "customer_id": "unknown",
+    "created_at": "2026-05-30T04:13:46.370430Z",
+    "updated_at": null,
+    "category": "order",
+    "resolution_text": "Order ord-1001 is currently delivered. Carrier: UPS, tracking: 1Z999AA10123456784.",
+    "confidence_score": 0.86,
+    "requires_human": false,
+    "sentiment_trajectory": [
+      0.0
+    ],
+    "sources": [
+      "orders.json",
+      "return-refund-policy.md"
+    ],
+    "conversation_history": [
+      {
+        "role": "human",
+        "content": "Show me headphones"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      }
+    ],
+    "status": "auto_resolved",
+    "order_id": "ord-1001",
+    "assigned_agent": null,
+    "notes": null,
+    "partition_key": "unknown"
+  },
+  {
+    "id": "4e86b992-8849-47c4-a134-82167546a543",
+    "customer_id": "cust-001",
+    "created_at": "2026-05-30T04:13:46.374283Z",
+    "updated_at": null,
+    "category": "escalation",
+    "resolution_text": "Escalating to a human agent.",
+    "confidence_score": 0.9,
+    "requires_human": true,
+    "sentiment_trajectory": [],
+    "sources": [],
+    "conversation_history": [
+      {
+        "role": "user",
+        "content": "This is unacceptable, I need a manager"
+      }
+    ],
+    "status": "escalated",
+    "order_id": null,
+    "assigned_agent": null,
+    "notes": null,
+    "partition_key": "cust-001"
+  },
+  {
+    "id": "6b22a3d2-d228-47db-b437-37f283efe09b",
+    "customer_id": "cust-001",
+    "created_at": "2026-05-30T04:13:46.375547Z",
+    "updated_at": null,
+    "category": "order",
+    "resolution_text": "Order ord-1001 is in transit.",
+    "confidence_score": 0.9,
+    "requires_human": false,
+    "sentiment_trajectory": [],
+    "sources": [],
+    "conversation_history": [
+      {
+        "role": "user",
+        "content": "Track order ord-1001"
+      }
+    ],
+    "status": "auto_resolved",
+    "order_id": null,
+    "assigned_agent": null,
+    "notes": null,
+    "partition_key": "cust-001"
+  },
+  {
+    "id": "108c9e95-23d5-4c89-ab46-0a63dda152b5",
+    "customer_id": "cust-001",
+    "created_at": "2026-05-30T05:53:08.965259Z",
+    "updated_at": null,
+    "category": "order",
+    "resolution_text": "Order ord-1001 is currently delivered. Carrier: UPS, tracking: 1Z999AA10123456784.",
+    "confidence_score": 0.86,
+    "requires_human": false,
+    "sentiment_trajectory": [
+      0.0
+    ],
+    "sources": [
+      "orders.json",
+      "return-refund-policy.md"
+    ],
+    "conversation_history": [
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      }
+    ],
+    "status": "auto_resolved",
+    "order_id": "ord-1001",
+    "assigned_agent": null,
+    "notes": null,
+    "partition_key": "cust-001"
+  },
+  {
+    "id": "6b003dda-8df8-4b3c-b95f-9e682d3b60ae",
+    "customer_id": "unknown",
+    "created_at": "2026-05-30T05:53:08.980462Z",
+    "updated_at": null,
+    "category": "order",
+    "resolution_text": "Order ord-1001 is currently delivered. Carrier: UPS, tracking: 1Z999AA10123456784.",
+    "confidence_score": 0.86,
+    "requires_human": false,
+    "sentiment_trajectory": [
+      0.0
+    ],
+    "sources": [
+      "orders.json",
+      "return-refund-policy.md"
+    ],
+    "conversation_history": [
+      {
+        "role": "human",
+        "content": "Show me headphones"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      }
+    ],
+    "status": "auto_resolved",
+    "order_id": "ord-1001",
+    "assigned_agent": null,
+    "notes": null,
+    "partition_key": "unknown"
+  },
+  {
+    "id": "2c854e8d-5a93-4f7e-8b0e-228861d35f5d",
+    "customer_id": "cust-001",
+    "created_at": "2026-05-30T05:59:40.479589Z",
+    "updated_at": null,
+    "category": "order",
+    "resolution_text": "Order ord-1001 is currently delivered. Carrier: UPS, tracking: 1Z999AA10123456784.",
+    "confidence_score": 0.86,
+    "requires_human": false,
+    "sentiment_trajectory": [
+      0.0
+    ],
+    "sources": [
+      "orders.json",
+      "return-refund-policy.md"
+    ],
+    "conversation_history": [
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      }
+    ],
+    "status": "auto_resolved",
+    "order_id": "ord-1001",
+    "assigned_agent": null,
+    "notes": null,
+    "partition_key": "cust-001"
+  },
+  {
+    "id": "2eddae0f-b7da-4492-8585-13151959d69b",
+    "customer_id": "unknown",
+    "created_at": "2026-05-30T05:59:40.516209Z",
+    "updated_at": null,
+    "category": "order",
+    "resolution_text": "Order ord-1001 is currently delivered. Carrier: UPS, tracking: 1Z999AA10123456784.",
+    "confidence_score": 0.86,
+    "requires_human": false,
+    "sentiment_trajectory": [
+      0.0
+    ],
+    "sources": [
+      "orders.json",
+      "return-refund-policy.md"
+    ],
+    "conversation_history": [
+      {
+        "role": "human",
+        "content": "Show me headphones"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      }
+    ],
+    "status": "auto_resolved",
+    "order_id": "ord-1001",
+    "assigned_agent": null,
+    "notes": null,
+    "partition_key": "unknown"
+  },
+  {
+    "id": "6d63a187-4392-419e-bc7c-43a1f00fc770",
+    "customer_id": "cust-001",
+    "created_at": "2026-05-30T06:15:38.231291Z",
+    "updated_at": null,
+    "category": "order",
+    "resolution_text": "Order ord-1001 is currently delivered. Carrier: UPS, tracking: 1Z999AA10123456784.",
+    "confidence_score": 0.86,
+    "requires_human": false,
+    "sentiment_trajectory": [
+      0.0
+    ],
+    "sources": [
+      "orders.json",
+      "return-refund-policy.md"
+    ],
+    "conversation_history": [
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      }
+    ],
+    "status": "auto_resolved",
+    "order_id": "ord-1001",
+    "assigned_agent": null,
+    "notes": null,
+    "partition_key": "cust-001"
+  },
+  {
+    "id": "c4b8186d-6d24-4ac5-9071-69923e11bd46",
+    "customer_id": "cust-001",
+    "created_at": "2026-05-30T07:44:56.139459Z",
+    "updated_at": null,
+    "category": "order",
+    "resolution_text": "Order ord-1001 is currently delivered. Carrier: UPS, tracking: 1Z999AA10123456784.",
+    "confidence_score": 0.86,
+    "requires_human": false,
+    "sentiment_trajectory": [
+      0.0
+    ],
+    "sources": [
+      "orders.json",
+      "return-refund-policy.md"
+    ],
+    "conversation_history": [
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      }
+    ],
+    "status": "auto_resolved",
+    "order_id": "ord-1001",
+    "assigned_agent": null,
+    "notes": null,
+    "partition_key": "cust-001"
+  },
+  {
+    "id": "388950f9-6875-45fa-b38c-1b1b1e0740d4",
+    "customer_id": "cust-001",
+    "created_at": "2026-05-30T07:44:56.173719Z",
+    "updated_at": null,
+    "category": "order",
+    "resolution_text": "Order ord-1001 is currently delivered. Carrier: UPS, tracking: 1Z999AA10123456784.",
+    "confidence_score": 0.86,
+    "requires_human": false,
+    "sentiment_trajectory": [
+      0.0
+    ],
+    "sources": [
+      "orders.json",
+      "return-refund-policy.md"
+    ],
+    "conversation_history": [
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      }
+    ],
+    "status": "auto_resolved",
+    "order_id": "ord-1001",
+    "assigned_agent": null,
+    "notes": null,
+    "partition_key": "cust-001"
+  },
+  {
+    "id": "4c8f0b46-556c-464e-a3c1-2aeb4208d63a",
+    "customer_id": "cust-001",
+    "created_at": "2026-05-30T07:44:56.184144Z",
+    "updated_at": null,
+    "category": "order",
+    "resolution_text": "Order ord-1001 is currently delivered. Carrier: UPS, tracking: 1Z999AA10123456784.",
+    "confidence_score": 0.86,
+    "requires_human": false,
+    "sentiment_trajectory": [
+      0.0
+    ],
+    "sources": [
+      "orders.json",
+      "return-refund-policy.md"
+    ],
+    "conversation_history": [
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      }
+    ],
+    "status": "auto_resolved",
+    "order_id": "ord-1001",
+    "assigned_agent": null,
+    "notes": null,
+    "partition_key": "cust-001"
+  },
+  {
+    "id": "74dacd90-4c1d-4067-a560-a9461175bf55",
+    "customer_id": "cust-001",
+    "created_at": "2026-05-30T07:44:56.208298Z",
+    "updated_at": null,
+    "category": "order",
+    "resolution_text": "Order ord-1001 is currently delivered. Carrier: UPS, tracking: 1Z999AA10123456784.",
+    "confidence_score": 0.86,
+    "requires_human": false,
+    "sentiment_trajectory": [
+      0.0
+    ],
+    "sources": [
+      "orders.json",
+      "return-refund-policy.md"
+    ],
+    "conversation_history": [
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      }
+    ],
+    "status": "auto_resolved",
+    "order_id": "ord-1001",
+    "assigned_agent": null,
+    "notes": null,
+    "partition_key": "cust-001"
+  },
+  {
+    "id": "19c37f17-f060-453e-9d99-257a70ebec68",
+    "customer_id": "unknown",
+    "created_at": "2026-05-30T07:44:56.221089Z",
+    "updated_at": null,
+    "category": "order",
+    "resolution_text": "Order ord-1001 is currently delivered. Carrier: UPS, tracking: 1Z999AA10123456784.",
+    "confidence_score": 0.86,
+    "requires_human": false,
+    "sentiment_trajectory": [
+      0.0
+    ],
+    "sources": [
+      "orders.json",
+      "return-refund-policy.md"
+    ],
+    "conversation_history": [
+      {
+        "role": "human",
+        "content": "Show me headphones"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      }
+    ],
+    "status": "auto_resolved",
+    "order_id": "ord-1001",
+    "assigned_agent": null,
+    "notes": null,
+    "partition_key": "unknown"
+  },
+  {
+    "id": "ce27d4af-7013-469d-80e4-1ad85ad844d9",
+    "customer_id": "cust-001",
+    "created_at": "2026-05-30T07:44:56.224930Z",
+    "updated_at": null,
+    "category": "escalation",
+    "resolution_text": "Escalating to a human agent.",
+    "confidence_score": 0.9,
+    "requires_human": true,
+    "sentiment_trajectory": [],
+    "sources": [],
+    "conversation_history": [
+      {
+        "role": "user",
+        "content": "This is unacceptable, I need a manager"
+      }
+    ],
+    "status": "escalated",
+    "order_id": null,
+    "assigned_agent": null,
+    "notes": null,
+    "partition_key": "cust-001"
+  },
+  {
+    "id": "4c82fd94-eb02-42b8-a5aa-3b39da5e5195",
+    "customer_id": "cust-001",
+    "created_at": "2026-05-30T07:44:56.226439Z",
+    "updated_at": null,
+    "category": "order",
+    "resolution_text": "Order ord-1001 is in transit.",
+    "confidence_score": 0.9,
+    "requires_human": false,
+    "sentiment_trajectory": [],
+    "sources": [],
+    "conversation_history": [
+      {
+        "role": "user",
+        "content": "Track order ord-1001"
+      }
+    ],
+    "status": "auto_resolved",
+    "order_id": null,
+    "assigned_agent": null,
+    "notes": null,
+    "partition_key": "cust-001"
+  },
+  {
+    "id": "67b25727-98f5-4998-932b-d68b5d85ce59",
+    "customer_id": "cust-001",
+    "created_at": "2026-05-30T07:53:08.500064Z",
+    "updated_at": null,
+    "category": "order",
+    "resolution_text": "Order ord-1001 is currently delivered. Carrier: UPS, tracking: 1Z999AA10123456784.",
+    "confidence_score": 0.86,
+    "requires_human": false,
+    "sentiment_trajectory": [
+      0.0
+    ],
+    "sources": [
+      "orders.json",
+      "return-refund-policy.md"
+    ],
+    "conversation_history": [
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      }
+    ],
+    "status": "auto_resolved",
+    "order_id": "ord-1001",
+    "assigned_agent": null,
+    "notes": null,
+    "partition_key": "cust-001"
+  },
+  {
+    "id": "a8e71665-df03-4c5d-a0e7-597dad7c9396",
+    "customer_id": "cust-001",
+    "created_at": "2026-05-30T07:53:08.530674Z",
+    "updated_at": null,
+    "category": "order",
+    "resolution_text": "Order ord-1001 is currently delivered. Carrier: UPS, tracking: 1Z999AA10123456784.",
+    "confidence_score": 0.86,
+    "requires_human": false,
+    "sentiment_trajectory": [
+      0.0
+    ],
+    "sources": [
+      "orders.json",
+      "return-refund-policy.md"
+    ],
+    "conversation_history": [
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      }
+    ],
+    "status": "auto_resolved",
+    "order_id": "ord-1001",
+    "assigned_agent": null,
+    "notes": null,
+    "partition_key": "cust-001"
+  },
+  {
+    "id": "32ae7323-fe84-4938-94bf-afdc3996f4cb",
+    "customer_id": "cust-001",
+    "created_at": "2026-05-30T07:53:08.540583Z",
+    "updated_at": null,
+    "category": "order",
+    "resolution_text": "Order ord-1001 is currently delivered. Carrier: UPS, tracking: 1Z999AA10123456784.",
+    "confidence_score": 0.86,
+    "requires_human": false,
+    "sentiment_trajectory": [
+      0.0
+    ],
+    "sources": [
+      "orders.json",
+      "return-refund-policy.md"
+    ],
+    "conversation_history": [
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      }
+    ],
+    "status": "auto_resolved",
+    "order_id": "ord-1001",
+    "assigned_agent": null,
+    "notes": null,
+    "partition_key": "cust-001"
+  },
+  {
+    "id": "6e078b96-d9b7-4663-a188-d466ebd37c36",
+    "customer_id": "cust-001",
+    "created_at": "2026-05-30T07:53:08.562257Z",
+    "updated_at": null,
+    "category": "order",
+    "resolution_text": "Order ord-1001 is currently delivered. Carrier: UPS, tracking: 1Z999AA10123456784.",
+    "confidence_score": 0.86,
+    "requires_human": false,
+    "sentiment_trajectory": [
+      0.0
+    ],
+    "sources": [
+      "orders.json",
+      "return-refund-policy.md"
+    ],
+    "conversation_history": [
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      }
+    ],
+    "status": "auto_resolved",
+    "order_id": "ord-1001",
+    "assigned_agent": null,
+    "notes": null,
+    "partition_key": "cust-001"
+  },
+  {
+    "id": "afcb204a-885b-48d4-b962-051b1461cb8c",
+    "customer_id": "unknown",
+    "created_at": "2026-05-30T07:53:08.574777Z",
+    "updated_at": null,
+    "category": "order",
+    "resolution_text": "Order ord-1001 is currently delivered. Carrier: UPS, tracking: 1Z999AA10123456784.",
+    "confidence_score": 0.86,
+    "requires_human": false,
+    "sentiment_trajectory": [
+      0.0
+    ],
+    "sources": [
+      "orders.json",
+      "return-refund-policy.md"
+    ],
+    "conversation_history": [
+      {
+        "role": "human",
+        "content": "Show me headphones"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      }
+    ],
+    "status": "auto_resolved",
+    "order_id": "ord-1001",
+    "assigned_agent": null,
+    "notes": null,
+    "partition_key": "unknown"
+  },
+  {
+    "id": "6905cb45-1a9c-4d76-a316-06c834c173bd",
+    "customer_id": "cust-001",
+    "created_at": "2026-05-30T07:53:08.578550Z",
+    "updated_at": null,
+    "category": "escalation",
+    "resolution_text": "Escalating to a human agent.",
+    "confidence_score": 0.9,
+    "requires_human": true,
+    "sentiment_trajectory": [],
+    "sources": [],
+    "conversation_history": [
+      {
+        "role": "user",
+        "content": "This is unacceptable, I need a manager"
+      }
+    ],
+    "status": "escalated",
+    "order_id": null,
+    "assigned_agent": null,
+    "notes": null,
+    "partition_key": "cust-001"
+  },
+  {
+    "id": "3899a733-37da-41cf-9cf0-4f50683d9d29",
+    "customer_id": "cust-001",
+    "created_at": "2026-05-30T07:53:08.579965Z",
+    "updated_at": null,
+    "category": "order",
+    "resolution_text": "Order ord-1001 is in transit.",
+    "confidence_score": 0.9,
+    "requires_human": false,
+    "sentiment_trajectory": [],
+    "sources": [],
+    "conversation_history": [
+      {
+        "role": "user",
+        "content": "Track order ord-1001"
+      }
+    ],
+    "status": "auto_resolved",
+    "order_id": null,
+    "assigned_agent": null,
+    "notes": null,
+    "partition_key": "cust-001"
+  },
+  {
+    "id": "3df1e583-e057-42db-8662-cd52d5ae1780",
+    "customer_id": "cust-001",
+    "created_at": "2026-05-30T08:51:15.430860Z",
+    "updated_at": null,
+    "category": "order",
+    "resolution_text": "Order ord-1001 is currently delivered. Carrier: UPS, tracking: 1Z999AA10123456784.",
+    "confidence_score": 0.86,
+    "requires_human": false,
+    "sentiment_trajectory": [
+      0.0
+    ],
+    "sources": [
+      "orders.json",
+      "return-refund-policy.md"
+    ],
+    "conversation_history": [
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      }
+    ],
+    "status": "auto_resolved",
+    "order_id": "ord-1001",
+    "assigned_agent": null,
+    "notes": null,
+    "partition_key": "cust-001"
+  },
+  {
+    "id": "866259f3-47da-45d1-aca5-d51bf55e0d4e",
+    "customer_id": "cust-001",
+    "created_at": "2026-05-30T08:51:15.466478Z",
+    "updated_at": null,
+    "category": "order",
+    "resolution_text": "Order ord-1001 is currently delivered. Carrier: UPS, tracking: 1Z999AA10123456784.",
+    "confidence_score": 0.86,
+    "requires_human": false,
+    "sentiment_trajectory": [
+      0.0
+    ],
+    "sources": [
+      "orders.json",
+      "return-refund-policy.md"
+    ],
+    "conversation_history": [
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      }
+    ],
+    "status": "auto_resolved",
+    "order_id": "ord-1001",
+    "assigned_agent": null,
+    "notes": null,
+    "partition_key": "cust-001"
+  },
+  {
+    "id": "fc9a8fac-da88-4f16-8eb7-f8b5124a50f5",
+    "customer_id": "cust-001",
+    "created_at": "2026-05-30T08:51:15.478621Z",
+    "updated_at": null,
+    "category": "order",
+    "resolution_text": "Order ord-1001 is currently delivered. Carrier: UPS, tracking: 1Z999AA10123456784.",
+    "confidence_score": 0.86,
+    "requires_human": false,
+    "sentiment_trajectory": [
+      0.0
+    ],
+    "sources": [
+      "orders.json",
+      "return-refund-policy.md"
+    ],
+    "conversation_history": [
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      }
+    ],
+    "status": "auto_resolved",
+    "order_id": "ord-1001",
+    "assigned_agent": null,
+    "notes": null,
+    "partition_key": "cust-001"
+  },
+  {
+    "id": "146244e6-637c-4a50-9371-5d301e30666d",
+    "customer_id": "cust-001",
+    "created_at": "2026-05-30T08:51:27.791245Z",
+    "updated_at": null,
+    "category": "order",
+    "resolution_text": "Order ord-1001 is currently delivered. Carrier: UPS, tracking: 1Z999AA10123456784.",
+    "confidence_score": 0.86,
+    "requires_human": false,
+    "sentiment_trajectory": [
+      0.0
+    ],
+    "sources": [
+      "orders.json",
+      "return-refund-policy.md"
+    ],
+    "conversation_history": [
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      }
+    ],
+    "status": "auto_resolved",
+    "order_id": "ord-1001",
+    "assigned_agent": null,
+    "notes": null,
+    "partition_key": "cust-001"
+  },
+  {
+    "id": "800bd5e6-5242-4ab7-a63e-74e2f6b0b45e",
+    "customer_id": "unknown",
+    "created_at": "2026-05-30T08:51:27.805519Z",
+    "updated_at": null,
+    "category": "order",
+    "resolution_text": "Order ord-1001 is currently delivered. Carrier: UPS, tracking: 1Z999AA10123456784.",
+    "confidence_score": 0.86,
+    "requires_human": false,
+    "sentiment_trajectory": [
+      0.0
+    ],
+    "sources": [
+      "orders.json",
+      "return-refund-policy.md"
+    ],
+    "conversation_history": [
+      {
+        "role": "human",
+        "content": "Show me headphones"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      }
+    ],
+    "status": "auto_resolved",
+    "order_id": "ord-1001",
+    "assigned_agent": null,
+    "notes": null,
+    "partition_key": "unknown"
+  },
+  {
+    "id": "91dbb480-6340-40a1-8d3a-560051d0a6f0",
+    "customer_id": "test",
+    "created_at": "2026-05-30T09:59:16.314435Z",
+    "updated_at": null,
+    "category": "order",
+    "resolution_text": "I could not find that order for this customer.",
+    "confidence_score": 0.45,
+    "requires_human": true,
+    "sentiment_trajectory": [
+      0.0
+    ],
+    "sources": [],
+    "conversation_history": [
+      {
+        "role": "human",
+        "content": "What is your return policy?"
+      },
+      {
+        "role": "human",
+        "content": "What is your return policy?"
+      }
+    ],
+    "status": "escalated",
+    "order_id": null,
+    "assigned_agent": null,
+    "notes": null,
+    "partition_key": "test"
+  },
+  {
+    "id": "7eda495a-7ecc-482e-ad5c-ba3605ec9bdc",
+    "customer_id": "cust-001",
+    "created_at": "2026-05-30T10:01:36.502153Z",
+    "updated_at": null,
+    "category": "order",
+    "resolution_text": "Order ord-1001 is currently delivered. Carrier: UPS, tracking: 1Z999AA10123456784.",
+    "confidence_score": 0.86,
+    "requires_human": false,
+    "sentiment_trajectory": [
+      0.0
+    ],
+    "sources": [
+      "orders.json",
+      "return-refund-policy.md"
+    ],
+    "conversation_history": [
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Show me electronics under $100"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Show me electronics under $100"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      }
+    ],
+    "status": "auto_resolved",
+    "order_id": "ord-1001",
+    "assigned_agent": null,
+    "notes": null,
+    "partition_key": "cust-001"
+  },
+  {
+    "id": "c9c17913-69a3-4826-bd1c-5c14879cc875",
+    "customer_id": "cust-001",
+    "created_at": "2026-05-30T10:04:25.966284Z",
+    "updated_at": null,
+    "category": "order",
+    "resolution_text": "Order ord-1001 is currently delivered. Carrier: UPS, tracking: 1Z999AA10123456784.",
+    "confidence_score": 0.86,
+    "requires_human": false,
+    "sentiment_trajectory": [
+      0.0
+    ],
+    "sources": [
+      "orders.json",
+      "return-refund-policy.md"
+    ],
+    "conversation_history": [
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Show me electronics under $100"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Show me electronics under $100"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      }
+    ],
+    "status": "auto_resolved",
+    "order_id": "ord-1001",
+    "assigned_agent": null,
+    "notes": null,
+    "partition_key": "cust-001"
+  },
+  {
+    "id": "fd72e4bf-3cdb-4956-99e9-9856e5b71789",
+    "customer_id": "cust-001",
+    "created_at": "2026-05-30T10:04:42.581714Z",
+    "updated_at": null,
+    "category": "order",
+    "resolution_text": "Order ord-1001 is currently delivered. Carrier: UPS, tracking: 1Z999AA10123456784.",
+    "confidence_score": 0.86,
+    "requires_human": false,
+    "sentiment_trajectory": [
+      0.0
+    ],
+    "sources": [
+      "orders.json",
+      "return-refund-policy.md"
+    ],
+    "conversation_history": [
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Show me electronics under $100"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Show me electronics under $100"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      }
+    ],
+    "status": "auto_resolved",
+    "order_id": "ord-1001",
+    "assigned_agent": null,
+    "notes": null,
+    "partition_key": "cust-001"
+  },
+  {
+    "id": "cc30aff1-5745-4b9e-9307-628d7d627e22",
+    "customer_id": "cust-001",
+    "created_at": "2026-05-30T10:05:32.220810Z",
+    "updated_at": null,
+    "category": "order",
+    "resolution_text": "Order ord-1001 is currently delivered. Carrier: UPS, tracking: 1Z999AA10123456784.",
+    "confidence_score": 0.86,
+    "requires_human": false,
+    "sentiment_trajectory": [
+      0.0
+    ],
+    "sources": [
+      "orders.json",
+      "return-refund-policy.md"
+    ],
+    "conversation_history": [
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Show me electronics under $100"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Show me electronics under $100"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      }
+    ],
+    "status": "auto_resolved",
+    "order_id": "ord-1001",
+    "assigned_agent": null,
+    "notes": null,
+    "partition_key": "cust-001"
+  },
+  {
+    "id": "8217b346-5da9-4ff2-b915-1f55b27e8f91",
+    "customer_id": "cust-001",
+    "created_at": "2026-05-30T10:07:06.309029Z",
+    "updated_at": null,
+    "category": "order",
+    "resolution_text": "Order ord-1001 is currently delivered. Carrier: UPS, tracking: 1Z999AA10123456784.",
+    "confidence_score": 0.86,
+    "requires_human": false,
+    "sentiment_trajectory": [
+      0.0
+    ],
+    "sources": [
+      "orders.json",
+      "return-refund-policy.md"
+    ],
+    "conversation_history": [
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Show me electronics under $100"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Show me electronics under $100"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      }
+    ],
+    "status": "auto_resolved",
+    "order_id": "ord-1001",
+    "assigned_agent": null,
+    "notes": null,
+    "partition_key": "cust-001"
+  },
+  {
+    "id": "ca4d68d5-7a78-4b78-b02e-93aecf89afb4",
+    "customer_id": "cust-001",
+    "created_at": "2026-05-30T10:08:12.559810Z",
+    "updated_at": null,
+    "category": "order",
+    "resolution_text": "Order ord-1001 is currently delivered. Carrier: UPS, tracking: 1Z999AA10123456784.",
+    "confidence_score": 0.86,
+    "requires_human": false,
+    "sentiment_trajectory": [
+      0.0
+    ],
+    "sources": [
+      "orders.json",
+      "return-refund-policy.md"
+    ],
+    "conversation_history": [
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Show me electronics under $100"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Show me electronics under $100"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      }
+    ],
+    "status": "auto_resolved",
+    "order_id": "ord-1001",
+    "assigned_agent": null,
+    "notes": null,
+    "partition_key": "cust-001"
+  },
+  {
+    "id": "fd2c3725-5153-43fa-b740-c880931e115b",
+    "customer_id": "cust-001",
+    "created_at": "2026-05-30T10:08:29.079038Z",
+    "updated_at": null,
+    "category": "order",
+    "resolution_text": "Order ord-1001 is currently delivered. Carrier: UPS, tracking: 1Z999AA10123456784.",
+    "confidence_score": 0.86,
+    "requires_human": false,
+    "sentiment_trajectory": [
+      0.0
+    ],
+    "sources": [
+      "orders.json",
+      "return-refund-policy.md"
+    ],
+    "conversation_history": [
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Show me electronics under $100"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Show me electronics under $100"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Show me electronics under $100"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      }
+    ],
+    "status": "auto_resolved",
+    "order_id": "ord-1001",
+    "assigned_agent": null,
+    "notes": null,
+    "partition_key": "cust-001"
+  },
+  {
+    "id": "e68930b1-78f8-40b2-88b8-def16228244b",
+    "customer_id": "unknown",
+    "created_at": "2026-05-30T10:10:19.569609Z",
+    "updated_at": null,
+    "category": "order",
+    "resolution_text": "Order ord-1001 is currently delivered. Carrier: UPS, tracking: 1Z999AA10123456784.",
+    "confidence_score": 0.86,
+    "requires_human": false,
+    "sentiment_trajectory": [
+      0.0
+    ],
+    "sources": [
+      "orders.json",
+      "return-refund-policy.md"
+    ],
+    "conversation_history": [
+      {
+        "role": "human",
+        "content": "Show me headphones"
+      },
+      {
+        "role": "human",
+        "content": "Show me headphones"
+      },
+      {
+        "role": "human",
+        "content": "Show me headphones"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      }
+    ],
+    "status": "auto_resolved",
+    "order_id": "ord-1001",
+    "assigned_agent": null,
+    "notes": null,
+    "partition_key": "unknown"
+  },
+  {
+    "id": "de76f3e2-9067-473c-90c7-513d5b9ed79e",
+    "customer_id": "test",
+    "created_at": "2026-05-30T10:10:58.486484Z",
+    "updated_at": null,
+    "category": "order",
+    "resolution_text": "I could not find that order for this customer.",
+    "confidence_score": 0.45,
+    "requires_human": true,
+    "sentiment_trajectory": [
+      0.0
+    ],
+    "sources": [],
+    "conversation_history": [
+      {
+        "role": "human",
+        "content": "What is your return policy?"
+      },
+      {
+        "role": "human",
+        "content": "What is your return policy?"
+      },
+      {
+        "role": "human",
+        "content": "What is your return policy?"
+      }
+    ],
+    "status": "escalated",
+    "order_id": null,
+    "assigned_agent": null,
+    "notes": null,
+    "partition_key": "test"
+  },
+  {
+    "id": "af2a0731-0091-43da-ac8d-07db8ba4360b",
+    "customer_id": "cust-001",
+    "created_at": "2026-05-30T10:11:09.211883Z",
+    "updated_at": null,
+    "category": "order",
+    "resolution_text": "Order ord-1001 is currently delivered. Carrier: UPS, tracking: 1Z999AA10123456784.",
+    "confidence_score": 0.86,
+    "requires_human": false,
+    "sentiment_trajectory": [
+      0.0
+    ],
+    "sources": [
+      "orders.json",
+      "return-refund-policy.md"
+    ],
+    "conversation_history": [
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Show me electronics under $100"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Show me electronics under $100"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Show me electronics under $100"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Show me electronics under $100"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      }
+    ],
+    "status": "auto_resolved",
+    "order_id": "ord-1001",
+    "assigned_agent": null,
+    "notes": null,
+    "partition_key": "cust-001"
+  },
+  {
+    "id": "03ed3eb7-62a7-4db6-a92a-cc344b1059f6",
+    "customer_id": "cust-001",
+    "created_at": "2026-05-30T10:11:47.939032Z",
+    "updated_at": null,
+    "category": "escalation",
+    "resolution_text": "Escalating to a human agent.",
+    "confidence_score": 0.9,
+    "requires_human": true,
+    "sentiment_trajectory": [],
+    "sources": [],
+    "conversation_history": [
+      {
+        "role": "user",
+        "content": "This is unacceptable, I need a manager"
+      }
+    ],
+    "status": "escalated",
+    "order_id": null,
+    "assigned_agent": null,
+    "notes": null,
+    "partition_key": "cust-001"
+  },
+  {
+    "id": "35ef38ec-0111-4f33-9a9a-3e43d5387419",
+    "customer_id": "cust-001",
+    "created_at": "2026-05-30T10:12:10.041735Z",
+    "updated_at": null,
+    "category": "order",
+    "resolution_text": "Order ord-1001 is in transit.",
+    "confidence_score": 0.9,
+    "requires_human": false,
+    "sentiment_trajectory": [],
+    "sources": [],
+    "conversation_history": [
+      {
+        "role": "user",
+        "content": "Track order ord-1001"
+      }
+    ],
+    "status": "auto_resolved",
+    "order_id": null,
+    "assigned_agent": null,
+    "notes": null,
+    "partition_key": "cust-001"
+  },
+  {
+    "id": "7ed6abac-f2b4-426b-b508-101aaa9777e4",
+    "customer_id": "unknown",
+    "created_at": "2026-05-30T10:12:59.621434Z",
+    "updated_at": null,
+    "category": "order",
+    "resolution_text": "Order ord-1001 is currently delivered. Carrier: UPS, tracking: 1Z999AA10123456784.",
+    "confidence_score": 0.86,
+    "requires_human": false,
+    "sentiment_trajectory": [
+      0.0
+    ],
+    "sources": [
+      "orders.json",
+      "return-refund-policy.md"
+    ],
+    "conversation_history": [
+      {
+        "role": "human",
+        "content": "Show me headphones"
+      },
+      {
+        "role": "human",
+        "content": "Show me headphones"
+      },
+      {
+        "role": "human",
+        "content": "Show me headphones"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Show me headphones"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      }
+    ],
+    "status": "auto_resolved",
+    "order_id": "ord-1001",
+    "assigned_agent": null,
+    "notes": null,
+    "partition_key": "unknown"
+  },
+  {
+    "id": "269829bd-5fc1-455f-b1af-8b1aa0a745b2",
+    "customer_id": "cust-001",
+    "created_at": "2026-05-30T10:14:17.610611Z",
+    "updated_at": null,
+    "category": "order",
+    "resolution_text": "Order ord-1001 is currently delivered. Carrier: UPS, tracking: 1Z999AA10123456784.",
+    "confidence_score": 0.86,
+    "requires_human": false,
+    "sentiment_trajectory": [
+      0.0
+    ],
+    "sources": [
+      "orders.json",
+      "return-refund-policy.md"
+    ],
+    "conversation_history": [
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Show me electronics under $100"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Show me electronics under $100"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Show me electronics under $100"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Show me electronics under $100"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      }
+    ],
+    "status": "auto_resolved",
+    "order_id": "ord-1001",
+    "assigned_agent": null,
+    "notes": null,
+    "partition_key": "cust-001"
+  },
+  {
+    "id": "0acf3489-9052-4e12-b02a-f1d52cc2b188",
+    "customer_id": "cust-001",
+    "created_at": "2026-05-30T10:14:27.884614Z",
+    "updated_at": null,
+    "category": "escalation",
+    "resolution_text": "Escalating to a human agent.",
+    "confidence_score": 0.9,
+    "requires_human": true,
+    "sentiment_trajectory": [],
+    "sources": [],
+    "conversation_history": [
+      {
+        "role": "user",
+        "content": "This is unacceptable, I need a manager"
+      }
+    ],
+    "status": "escalated",
+    "order_id": null,
+    "assigned_agent": null,
+    "notes": null,
+    "partition_key": "cust-001"
+  },
+  {
+    "id": "4f9fe999-6fad-461e-8f23-0d4a23458628",
+    "customer_id": "cust-001",
+    "created_at": "2026-05-30T10:14:50.001919Z",
+    "updated_at": null,
+    "category": "order",
+    "resolution_text": "Order ord-1001 is in transit.",
+    "confidence_score": 0.9,
+    "requires_human": false,
+    "sentiment_trajectory": [],
+    "sources": [],
+    "conversation_history": [
+      {
+        "role": "user",
+        "content": "Track order ord-1001"
+      }
+    ],
+    "status": "auto_resolved",
+    "order_id": null,
+    "assigned_agent": null,
+    "notes": null,
+    "partition_key": "cust-001"
+  },
+  {
+    "id": "4c388905-0405-465d-9df7-ee20d6f580c9",
+    "customer_id": "cust-001",
+    "created_at": "2026-05-30T10:15:02.379389Z",
+    "updated_at": null,
+    "category": "order",
+    "resolution_text": "Order ord-1001 is currently delivered. Carrier: UPS, tracking: 1Z999AA10123456784.",
+    "confidence_score": 0.86,
+    "requires_human": false,
+    "sentiment_trajectory": [
+      0.0
+    ],
+    "sources": [
+      "orders.json",
+      "return-refund-policy.md"
+    ],
+    "conversation_history": [
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Show me electronics under $100"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Show me electronics under $100"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Show me electronics under $100"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Show me electronics under $100"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      }
+    ],
+    "status": "auto_resolved",
+    "order_id": "ord-1001",
+    "assigned_agent": null,
+    "notes": null,
+    "partition_key": "cust-001"
+  },
+  {
+    "id": "8f7b80ad-501c-45f0-a29b-ac5812acce32",
+    "customer_id": "cust-001",
+    "created_at": "2026-05-30T10:19:58.710868Z",
+    "updated_at": null,
+    "category": "order",
+    "resolution_text": "Order ord-1001 is currently delivered. Carrier: UPS, tracking: 1Z999AA10123456784.",
+    "confidence_score": 0.86,
+    "requires_human": false,
+    "sentiment_trajectory": [
+      0.0
+    ],
+    "sources": [
+      "orders.json",
+      "return-refund-policy.md"
+    ],
+    "conversation_history": [
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Show me electronics under $100"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Show me electronics under $100"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Show me electronics under $100"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Show me electronics under $100"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Recommend headphones"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      }
+    ],
+    "status": "auto_resolved",
+    "order_id": "ord-1001",
+    "assigned_agent": null,
+    "notes": null,
+    "partition_key": "cust-001"
+  },
+  {
+    "id": "a952b26d-af0c-4314-a908-075314462d85",
+    "customer_id": "cust-001",
+    "created_at": "2026-05-30T10:22:21.975133Z",
+    "updated_at": null,
+    "category": "order",
+    "resolution_text": "Order ord-1001 is currently delivered. Carrier: UPS, tracking: 1Z999AA10123456784.",
+    "confidence_score": 0.86,
+    "requires_human": false,
+    "sentiment_trajectory": [
+      0.0
+    ],
+    "sources": [
+      "orders.json",
+      "return-refund-policy.md"
+    ],
+    "conversation_history": [
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Show me electronics under $100"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Show me electronics under $100"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Show me electronics under $100"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Show me electronics under $100"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Recommend headphones"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      }
+    ],
+    "status": "auto_resolved",
+    "order_id": "ord-1001",
+    "assigned_agent": null,
+    "notes": null,
+    "partition_key": "cust-001"
+  },
+  {
+    "id": "f6752d2a-eceb-41bd-ac95-05029aad264c",
+    "customer_id": "cust-001",
+    "created_at": "2026-05-30T10:23:28.240278Z",
+    "updated_at": null,
+    "category": "order",
+    "resolution_text": "Order ord-1001 is currently delivered. Carrier: UPS, tracking: 1Z999AA10123456784.",
+    "confidence_score": 0.86,
+    "requires_human": false,
+    "sentiment_trajectory": [
+      0.0
+    ],
+    "sources": [
+      "orders.json",
+      "return-refund-policy.md"
+    ],
+    "conversation_history": [
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Show me electronics under $100"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Show me electronics under $100"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Show me electronics under $100"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Show me electronics under $100"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Recommend headphones"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      }
+    ],
+    "status": "auto_resolved",
+    "order_id": "ord-1001",
+    "assigned_agent": null,
+    "notes": null,
+    "partition_key": "cust-001"
+  },
+  {
+    "id": "0b6cab4e-3995-4e1e-b1a9-1bf898d3d9fc",
+    "customer_id": "cust-001",
+    "created_at": "2026-05-30T10:26:24.869717Z",
+    "updated_at": null,
+    "category": "order",
+    "resolution_text": "Order ord-1001 is currently delivered. Carrier: UPS, tracking: 1Z999AA10123456784.",
+    "confidence_score": 0.86,
+    "requires_human": false,
+    "sentiment_trajectory": [
+      0.0
+    ],
+    "sources": [
+      "orders.json",
+      "return-refund-policy.md"
+    ],
+    "conversation_history": [
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Show me electronics under $100"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Show me electronics under $100"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Show me electronics under $100"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Show me electronics under $100"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Recommend headphones"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Recommed me a sony headphone"
+      },
+      {
+        "role": "human",
+        "content": "Show me electronics under $100"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      }
+    ],
+    "status": "auto_resolved",
+    "order_id": "ord-1001",
+    "assigned_agent": null,
+    "notes": null,
+    "partition_key": "cust-001"
+  },
+  {
+    "id": "a0844f47-418c-46c5-b7a2-660003eb9c11",
+    "customer_id": "unknown",
+    "created_at": "2026-05-30T10:28:15.403200Z",
+    "updated_at": null,
+    "category": "order",
+    "resolution_text": "Order ord-1001 is currently delivered. Carrier: UPS, tracking: 1Z999AA10123456784.",
+    "confidence_score": 0.86,
+    "requires_human": false,
+    "sentiment_trajectory": [
+      0.0
+    ],
+    "sources": [
+      "orders.json",
+      "return-refund-policy.md"
+    ],
+    "conversation_history": [
+      {
+        "role": "human",
+        "content": "Show me headphones"
+      },
+      {
+        "role": "human",
+        "content": "Show me headphones"
+      },
+      {
+        "role": "human",
+        "content": "Show me headphones"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Show me headphones"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Show me headphones"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      }
+    ],
+    "status": "auto_resolved",
+    "order_id": "ord-1001",
+    "assigned_agent": null,
+    "notes": null,
+    "partition_key": "unknown"
+  },
+  {
+    "id": "58d4efae-4f1e-4d3c-ad43-ead435f43855",
+    "customer_id": "cust-001",
+    "created_at": "2026-05-30T10:29:43.634644Z",
+    "updated_at": null,
+    "category": "escalation",
+    "resolution_text": "Escalating to a human agent.",
+    "confidence_score": 0.9,
+    "requires_human": true,
+    "sentiment_trajectory": [],
+    "sources": [],
+    "conversation_history": [
+      {
+        "role": "user",
+        "content": "This is unacceptable, I need a manager"
+      }
+    ],
+    "status": "escalated",
+    "order_id": null,
+    "assigned_agent": null,
+    "notes": null,
+    "partition_key": "cust-001"
+  },
+  {
+    "id": "f71177f2-f307-44b0-94f0-295affc13546",
+    "customer_id": "cust-001",
+    "created_at": "2026-05-30T10:30:05.746071Z",
+    "updated_at": null,
+    "category": "order",
+    "resolution_text": "Order ord-1001 is in transit.",
+    "confidence_score": 0.9,
+    "requires_human": false,
+    "sentiment_trajectory": [],
+    "sources": [],
+    "conversation_history": [
+      {
+        "role": "user",
+        "content": "Track order ord-1001"
+      }
+    ],
+    "status": "auto_resolved",
+    "order_id": null,
+    "assigned_agent": null,
+    "notes": null,
+    "partition_key": "cust-001"
+  },
+  {
+    "id": "f723d77a-35c9-4a99-ba62-68f2c8833d7b",
+    "customer_id": "cust-001",
+    "created_at": "2026-05-30T10:34:44.999844Z",
+    "updated_at": null,
+    "category": "order",
+    "resolution_text": "Order ord-1001 is currently delivered.",
+    "confidence_score": 0.86,
+    "requires_human": false,
+    "sentiment_trajectory": [
+      0.0
+    ],
+    "sources": [
+      "orders.json",
+      "return-refund-policy.md"
+    ],
+    "conversation_history": [
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Show me electronics under $100"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Show me electronics under $100"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Show me electronics under $100"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Show me electronics under $100"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Recommend headphones"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Recommed me a sony headphone"
+      },
+      {
+        "role": "human",
+        "content": "Show me electronics under $100"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      }
+    ],
+    "status": "auto_resolved",
+    "order_id": "ord-1001",
+    "assigned_agent": null,
+    "notes": null,
+    "partition_key": "cust-001"
+  },
+  {
+    "id": "8389a2bc-e63b-4aaf-8867-7a2d7f8dfecd",
+    "customer_id": "cust-001",
+    "created_at": "2026-05-30T10:37:09.956698Z",
+    "updated_at": null,
+    "category": "order",
+    "resolution_text": "Order ord-1001 is currently delivered.",
+    "confidence_score": 0.86,
+    "requires_human": false,
+    "sentiment_trajectory": [
+      0.0
+    ],
+    "sources": [
+      "orders.json",
+      "return-refund-policy.md"
+    ],
+    "conversation_history": [
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Show me electronics under $100"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Show me electronics under $100"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Show me electronics under $100"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Show me electronics under $100"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Recommend headphones"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Recommed me a sony headphone"
+      },
+      {
+        "role": "human",
+        "content": "Show me electronics under $100"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      }
+    ],
+    "status": "auto_resolved",
+    "order_id": "ord-1001",
+    "assigned_agent": null,
+    "notes": null,
+    "partition_key": "cust-001"
+  },
+  {
+    "id": "dbfbaa48-1c7a-44fa-ae2e-b62e050a3245",
+    "customer_id": "cust-001",
+    "created_at": "2026-05-30T10:38:16.380077Z",
+    "updated_at": null,
+    "category": "order",
+    "resolution_text": "Order ord-1001 is currently delivered.",
+    "confidence_score": 0.86,
+    "requires_human": false,
+    "sentiment_trajectory": [
+      0.0
+    ],
+    "sources": [
+      "orders.json",
+      "return-refund-policy.md"
+    ],
+    "conversation_history": [
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Show me electronics under $100"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Show me electronics under $100"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Show me electronics under $100"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Show me electronics under $100"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Recommend headphones"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Recommed me a sony headphone"
+      },
+      {
+        "role": "human",
+        "content": "Show me electronics under $100"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      }
+    ],
+    "status": "auto_resolved",
+    "order_id": "ord-1001",
+    "assigned_agent": null,
+    "notes": null,
+    "partition_key": "cust-001"
+  },
+  {
+    "id": "b02bb5cb-d4f0-438f-8bc2-dc4c2944c1f9",
+    "customer_id": "cust-001",
+    "created_at": "2026-05-30T10:41:56.070899Z",
+    "updated_at": null,
+    "category": "order",
+    "resolution_text": "Order ord-1001 is currently delivered.",
+    "confidence_score": 0.86,
+    "requires_human": false,
+    "sentiment_trajectory": [
+      0.0
+    ],
+    "sources": [
+      "orders.json",
+      "return-refund-policy.md"
+    ],
+    "conversation_history": [
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Show me electronics under $100"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Show me electronics under $100"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Show me electronics under $100"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Show me electronics under $100"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Recommend headphones"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Recommed me a sony headphone"
+      },
+      {
+        "role": "human",
+        "content": "Show me electronics under $100"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Show me electronics under $100"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      }
+    ],
+    "status": "auto_resolved",
+    "order_id": "ord-1001",
+    "assigned_agent": null,
+    "notes": null,
+    "partition_key": "cust-001"
+  },
+  {
+    "id": "8ad080cb-bd0d-4c5d-91d1-eedaa7b5d653",
+    "customer_id": "unknown",
+    "created_at": "2026-05-30T10:43:46.453370Z",
+    "updated_at": null,
+    "category": "order",
+    "resolution_text": "Order ord-1001 is currently delivered.",
+    "confidence_score": 0.86,
+    "requires_human": false,
+    "sentiment_trajectory": [
+      0.0
+    ],
+    "sources": [
+      "orders.json",
+      "return-refund-policy.md"
+    ],
+    "conversation_history": [
+      {
+        "role": "human",
+        "content": "Show me headphones"
+      },
+      {
+        "role": "human",
+        "content": "Show me headphones"
+      },
+      {
+        "role": "human",
+        "content": "Show me headphones"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Show me headphones"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Show me headphones"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      },
+      {
+        "role": "human",
+        "content": "Show me headphones"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      }
+    ],
+    "status": "auto_resolved",
+    "order_id": "ord-1001",
+    "assigned_agent": null,
+    "notes": null,
+    "partition_key": "unknown"
+  },
+  {
+    "id": "f8cf6135-ba5a-4581-bb4a-f08d62409202",
+    "customer_id": "cust-001",
+    "created_at": "2026-05-30T10:59:20.711153Z",
+    "updated_at": null,
+    "category": "order",
+    "resolution_text": "Mock LLM response.",
+    "confidence_score": 0.88,
+    "requires_human": false,
+    "sentiment_trajectory": [
+      0.3
+    ],
+    "sources": [
+      "orders.json",
+      "return-refund-policy.md"
+    ],
+    "conversation_history": [
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      }
+    ],
+    "status": "auto_resolved",
+    "order_id": "ord-1001",
+    "assigned_agent": null,
+    "notes": null,
+    "partition_key": "cust-001"
+  },
+  {
+    "id": "a2fdcfb3-8ac7-4c99-bd2a-33f665a57f7d",
+    "customer_id": "cust-001",
+    "created_at": "2026-05-30T11:04:00.909784Z",
+    "updated_at": null,
+    "category": "order",
+    "resolution_text": "Mock LLM response.",
+    "confidence_score": 0.88,
+    "requires_human": false,
+    "sentiment_trajectory": [
+      0.3
+    ],
+    "sources": [
+      "orders.json",
+      "return-refund-policy.md"
+    ],
+    "conversation_history": [
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      }
+    ],
+    "status": "auto_resolved",
+    "order_id": "ord-1001",
+    "assigned_agent": null,
+    "notes": null,
+    "partition_key": "cust-001"
+  },
+  {
+    "id": "cd9f3559-498c-4716-84cf-a1c663672341",
+    "customer_id": "cust-001",
+    "created_at": "2026-05-30T11:08:29.336451Z",
+    "updated_at": null,
+    "category": "order",
+    "resolution_text": "Mock LLM response.",
+    "confidence_score": 0.88,
+    "requires_human": false,
+    "sentiment_trajectory": [
+      0.3
+    ],
+    "sources": [
+      "orders.json",
+      "return-refund-policy.md"
+    ],
+    "conversation_history": [
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      }
+    ],
+    "status": "auto_resolved",
+    "order_id": "ord-1001",
+    "assigned_agent": null,
+    "notes": null,
+    "partition_key": "cust-001"
+  },
+  {
+    "id": "c1c0b6ee-6a39-44b4-9dd5-12e1c2c70d87",
+    "customer_id": "unknown",
+    "created_at": "2026-05-30T11:10:20.099190Z",
+    "updated_at": null,
+    "category": "order",
+    "resolution_text": "Mock LLM response.",
+    "confidence_score": 0.88,
+    "requires_human": false,
+    "sentiment_trajectory": [
+      0.3
+    ],
+    "sources": [
+      "orders.json",
+      "return-refund-policy.md"
+    ],
+    "conversation_history": [
+      {
+        "role": "human",
+        "content": "Show me headphones"
+      },
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      }
+    ],
+    "status": "auto_resolved",
+    "order_id": "ord-1001",
+    "assigned_agent": null,
+    "notes": null,
+    "partition_key": "unknown"
+  },
+  {
+    "id": "f8502163-07de-4f25-a85b-a8dbca521122",
+    "customer_id": "cust-001",
+    "created_at": "2026-05-30T11:15:29.355795Z",
+    "updated_at": null,
+    "category": "escalation",
+    "resolution_text": "Escalating to a human agent.",
+    "confidence_score": 0.9,
+    "requires_human": true,
+    "sentiment_trajectory": [],
+    "sources": [],
+    "conversation_history": [
+      {
+        "role": "user",
+        "content": "This is unacceptable, I need a manager"
+      }
+    ],
+    "status": "escalated",
+    "order_id": null,
+    "assigned_agent": null,
+    "notes": null,
+    "partition_key": "cust-001"
+  },
+  {
+    "id": "afb3c5e2-4518-4c56-832d-c5da27ffd98b",
+    "customer_id": "cust-001",
+    "created_at": "2026-05-30T11:15:51.466482Z",
+    "updated_at": null,
+    "category": "order",
+    "resolution_text": "Order ord-1001 is in transit.",
+    "confidence_score": 0.9,
+    "requires_human": false,
+    "sentiment_trajectory": [],
+    "sources": [],
+    "conversation_history": [
+      {
+        "role": "user",
+        "content": "Track order ord-1001"
+      }
+    ],
+    "status": "auto_resolved",
+    "order_id": null,
+    "assigned_agent": null,
+    "notes": null,
+    "partition_key": "cust-001"
+  },
+  {
+    "id": "890466f6-834a-400b-840d-b2787483ac92",
+    "customer_id": "cust-001",
+    "created_at": "2026-05-30T11:17:39.168181Z",
+    "updated_at": null,
+    "category": "order",
+    "resolution_text": "Mock LLM response.",
+    "confidence_score": 0.88,
+    "requires_human": false,
+    "sentiment_trajectory": [
+      0.3
+    ],
+    "sources": [
+      "orders.json",
+      "return-refund-policy.md"
+    ],
+    "conversation_history": [
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      }
+    ],
+    "status": "auto_resolved",
+    "order_id": "ord-1001",
+    "assigned_agent": null,
+    "notes": null,
+    "partition_key": "cust-001"
+  },
+  {
+    "id": "ed3b032d-f330-4e33-bca4-a9b7a9a120ad",
+    "customer_id": "cust-001",
+    "created_at": "2026-05-30T11:20:03.320886Z",
+    "updated_at": null,
+    "category": "order",
+    "resolution_text": "Mock LLM response.",
+    "confidence_score": 0.88,
+    "requires_human": false,
+    "sentiment_trajectory": [
+      0.3
+    ],
+    "sources": [
+      "orders.json",
+      "return-refund-policy.md"
+    ],
+    "conversation_history": [
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      }
+    ],
+    "status": "auto_resolved",
+    "order_id": "ord-1001",
+    "assigned_agent": null,
+    "notes": null,
+    "partition_key": "cust-001"
+  },
+  {
+    "id": "435230ac-4834-4658-b9c7-dc3e37761fea",
+    "customer_id": "cust-001",
+    "created_at": "2026-05-30T11:21:09.626018Z",
+    "updated_at": null,
+    "category": "order",
+    "resolution_text": "Mock LLM response.",
+    "confidence_score": 0.88,
+    "requires_human": false,
+    "sentiment_trajectory": [
+      0.3
+    ],
+    "sources": [
+      "orders.json",
+      "return-refund-policy.md"
+    ],
+    "conversation_history": [
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      }
+    ],
+    "status": "auto_resolved",
+    "order_id": "ord-1001",
+    "assigned_agent": null,
+    "notes": null,
+    "partition_key": "cust-001"
+  },
+  {
+    "id": "e0ef2c0f-babf-42db-9340-69891d33d81e",
+    "customer_id": "cust123",
+    "created_at": "2026-05-31T08:39:30.405461Z",
+    "updated_at": null,
+    "category": "escalation",
+    "resolution_text": "Hello! I'm here to help and want to make sure we get your concerns resolved. I will have a specialist review your account and case history right away so we have the full context of your situation. A support specialist will follow up with you within 24 hours.",
+    "confidence_score": 0.9,
+    "requires_human": true,
+    "sentiment_trajectory": [
+      0.0
+    ],
+    "sources": [],
+    "conversation_history": [
+      {
+        "role": "human",
+        "content": "Hello, I need help"
+      }
+    ],
+    "status": "escalated",
+    "order_id": null,
+    "assigned_agent": null,
+    "notes": null,
+    "partition_key": "cust123"
+  },
+  {
+    "id": "e60fb53a-5b7f-4172-a3fd-39ff67bc2a8a",
+    "customer_id": "cust-123",
+    "created_at": "2026-05-31T12:07:54.483189Z",
+    "updated_at": null,
+    "category": "order",
+    "resolution_text": "I'm sorry to hear that your order hasn't arrived yet. \n\nI tried looking up your details, but I couldn't find any matching orders in our system. Could you please provide your **order ID** or the email address used to place the order? \n\nOnce I have that information, I'll be happy to look up the tracking details and see what's going on!",
+    "confidence_score": 0.45,
+    "requires_human": true,
+    "sentiment_trajectory": [
+      0.4
+    ],
+    "sources": [
+      "orders.json",
+      "return-refund-policy.md"
+    ],
+    "conversation_history": [
+      {
+        "role": "human",
+        "content": "My order hasn't arrived"
+      }
+    ],
+    "status": "escalated",
+    "order_id": null,
+    "assigned_agent": null,
+    "notes": null,
+    "partition_key": "cust-123"
+  },
+  {
+    "id": "0cc15051-6706-4b9d-87e5-0df12d04845a",
+    "customer_id": "cust-001",
+    "created_at": "2026-05-31T13:02:30.691021Z",
+    "updated_at": null,
+    "category": "order",
+    "resolution_text": "Mock LLM response.",
+    "confidence_score": 0.88,
+    "requires_human": false,
+    "sentiment_trajectory": [
+      0.3
+    ],
+    "sources": [
+      "orders.json",
+      "return-refund-policy.md"
+    ],
+    "conversation_history": [
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      }
+    ],
+    "status": "auto_resolved",
+    "order_id": "ord-1001",
+    "assigned_agent": null,
+    "notes": null,
+    "partition_key": "cust-001"
+  },
+  {
+    "id": "64ab2fed-7a02-404c-bbb9-2c217b71f755",
+    "customer_id": "cust-001",
+    "created_at": "2026-05-31T13:02:30.887303Z",
+    "updated_at": null,
+    "category": "order",
+    "resolution_text": "Mock LLM response.",
+    "confidence_score": 0.88,
+    "requires_human": false,
+    "sentiment_trajectory": [
+      0.3
+    ],
+    "sources": [
+      "orders.json",
+      "return-refund-policy.md"
+    ],
+    "conversation_history": [
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      }
+    ],
+    "status": "auto_resolved",
+    "order_id": "ord-1001",
+    "assigned_agent": null,
+    "notes": null,
+    "partition_key": "cust-001"
+  },
+  {
+    "id": "2ed4aa09-675b-4d3a-b9f2-ff2f3e683a36",
+    "customer_id": "cust-001",
+    "created_at": "2026-05-31T14:07:22.889716Z",
+    "updated_at": null,
+    "category": "order",
+    "resolution_text": "Mock LLM response.",
+    "confidence_score": 0.88,
+    "requires_human": false,
+    "sentiment_trajectory": [
+      0.3
+    ],
+    "sources": [
+      "orders.json",
+      "return-refund-policy.md"
+    ],
+    "conversation_history": [
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      }
+    ],
+    "status": "auto_resolved",
+    "order_id": "ord-1001",
+    "assigned_agent": null,
+    "notes": null,
+    "partition_key": "cust-001"
+  },
+  {
+    "id": "4e2f2300-c6a7-4b22-93a6-90c084e523ca",
+    "customer_id": "cust-001",
+    "created_at": "2026-05-31T14:07:23.098969Z",
+    "updated_at": null,
+    "category": "order",
+    "resolution_text": "Mock LLM response.",
+    "confidence_score": 0.88,
+    "requires_human": false,
+    "sentiment_trajectory": [
+      0.3
+    ],
+    "sources": [
+      "orders.json",
+      "return-refund-policy.md"
+    ],
+    "conversation_history": [
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      }
+    ],
+    "status": "auto_resolved",
+    "order_id": "ord-1001",
+    "assigned_agent": null,
+    "notes": null,
+    "partition_key": "cust-001"
+  },
+  {
+    "id": "e3b77afe-7d52-4ac4-8238-eab89d9f6e26",
+    "customer_id": "cust-001",
+    "created_at": "2026-05-31T14:08:47.988006Z",
+    "updated_at": null,
+    "category": "order",
+    "resolution_text": "Mock LLM response.",
+    "confidence_score": 0.88,
+    "requires_human": false,
+    "sentiment_trajectory": [
+      0.3
+    ],
+    "sources": [
+      "orders.json",
+      "return-refund-policy.md"
+    ],
+    "conversation_history": [
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      }
+    ],
+    "status": "auto_resolved",
+    "order_id": "ord-1001",
+    "assigned_agent": null,
+    "notes": null,
+    "partition_key": "cust-001"
+  },
+  {
+    "id": "aacf3560-fa83-4390-976b-9a8f6f8750eb",
+    "customer_id": "cust-001",
+    "created_at": "2026-05-31T14:08:48.030615Z",
+    "updated_at": null,
+    "category": "order",
+    "resolution_text": "Mock LLM response.",
+    "confidence_score": 0.88,
+    "requires_human": false,
+    "sentiment_trajectory": [
+      0.3
+    ],
+    "sources": [
+      "orders.json",
+      "return-refund-policy.md"
+    ],
+    "conversation_history": [
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      }
+    ],
+    "status": "auto_resolved",
+    "order_id": "ord-1001",
+    "assigned_agent": null,
+    "notes": null,
+    "partition_key": "cust-001"
+  },
+  {
+    "id": "f926efe0-8897-4516-9f89-93fc254ad6dc",
+    "customer_id": "cust-001",
+    "created_at": "2026-05-31T14:08:48.043729Z",
+    "updated_at": null,
+    "category": "order",
+    "resolution_text": "Mock LLM response.",
+    "confidence_score": 0.88,
+    "requires_human": false,
+    "sentiment_trajectory": [
+      0.3
+    ],
+    "sources": [
+      "orders.json",
+      "return-refund-policy.md"
+    ],
+    "conversation_history": [
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      }
+    ],
+    "status": "auto_resolved",
+    "order_id": "ord-1001",
+    "assigned_agent": null,
+    "notes": null,
+    "partition_key": "cust-001"
+  },
+  {
+    "id": "ad4a24af-7b28-4c53-87b6-f108bbc4610e",
+    "customer_id": "cust-001",
+    "created_at": "2026-05-31T14:31:49.489872Z",
+    "updated_at": null,
+    "category": "order",
+    "resolution_text": "Mock LLM response.",
+    "confidence_score": 0.88,
+    "requires_human": false,
+    "sentiment_trajectory": [
+      0.3
+    ],
+    "sources": [
+      "orders.json",
+      "return-refund-policy.md"
+    ],
+    "conversation_history": [
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      }
+    ],
+    "status": "auto_resolved",
+    "order_id": "ord-1001",
+    "assigned_agent": null,
+    "notes": null,
+    "partition_key": "cust-001"
+  },
+  {
+    "id": "6a42575e-b55c-4254-a378-be6de7301d4f",
+    "customer_id": "cust-001",
+    "created_at": "2026-05-31T14:31:49.543019Z",
+    "updated_at": null,
+    "category": "order",
+    "resolution_text": "Mock LLM response.",
+    "confidence_score": 0.88,
+    "requires_human": false,
+    "sentiment_trajectory": [
+      0.3
+    ],
+    "sources": [
+      "orders.json",
+      "return-refund-policy.md"
+    ],
+    "conversation_history": [
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      }
+    ],
+    "status": "auto_resolved",
+    "order_id": "ord-1001",
+    "assigned_agent": null,
+    "notes": null,
+    "partition_key": "cust-001"
+  },
+  {
+    "id": "93e90033-2c5a-4040-b7d6-b75decad685b",
+    "customer_id": "cust-001",
+    "created_at": "2026-05-31T14:31:49.556501Z",
+    "updated_at": null,
+    "category": "order",
+    "resolution_text": "Mock LLM response.",
+    "confidence_score": 0.88,
+    "requires_human": false,
+    "sentiment_trajectory": [
+      0.3
+    ],
+    "sources": [
+      "orders.json",
+      "return-refund-policy.md"
+    ],
+    "conversation_history": [
+      {
+        "role": "human",
+        "content": "Track order ord-1001"
+      }
+    ],
+    "status": "auto_resolved",
+    "order_id": "ord-1001",
+    "assigned_agent": null,
+    "notes": null,
+    "partition_key": "cust-001"
+  }
+]
