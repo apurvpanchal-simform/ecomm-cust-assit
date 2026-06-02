@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+
+# Virtual Environment
+.venv/
+venv/
+
+# Environment Variables
+.env
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+
+# Testing
+.pytest_cache/
+
+# Ruff
+.ruff_cache/
+
+# Mypy
+.mypy_cache/
