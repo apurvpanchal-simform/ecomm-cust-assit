@@ -4,6 +4,8 @@ from enum import StrEnum
 
 from pydantic import BaseModel, Field
 
+from typing import Literal
+
 from app.schemas.product import ProductCard
 
 
@@ -41,6 +43,9 @@ class SupportIntentClassification(BaseModel):
     confidence: float = Field(ge=0.0, le=1.0)
     reasoning: str = Field(description="Brief explanation of the support category")
 
+class RouteDecision(BaseModel):
+    route: Literal["faq", "order"]
+    confidence: float
 
 class AgentResponse(BaseModel):
     """Structured output from support agents — enforced on every response."""
