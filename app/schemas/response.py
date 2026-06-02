@@ -19,8 +19,8 @@ class TicketCategory(StrEnum):
 
     FAQ = "faq"
     ORDER = "order"
-    TECHNICAL = "technical"
     ESCALATION = "escalation"
+    RECOMMENDATION = "recommendation"
 
 
 class IntentClassification(BaseModel):
