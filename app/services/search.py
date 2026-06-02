@@ -8,7 +8,7 @@ load_dotenv()
 
 class VectorStore:
     def __init__(self):
-        self.url = os.getenv('QDRANT_URL','http://localhostl:6333')
+        self.url = os.getenv('QDRANT_URL','http://localhost:6333')
         self.collection_name = 'ecommerce-knowledge'
         self.client = QdrantClient(url=self.url)
         self.embeddings = GoogleGenerativeAIEmbeddings(model=os.getenv('EMBEDDING_MODEL'))
@@ -19,13 +19,13 @@ class VectorStore:
         except Exception:
             self.client.create_collection(
                 collection_name=self.collection_name,
-                vectors_config=VectorParams(size=4, distance=Distance.COSINE),
+                vectors_config=VectorParams(size=3072, distance=Distance.COSINE),
             )
 
     def initialize(self):
         self._ensure_collection()
 
-    def hybrid_search(self, query: str, top_k: int = 3):
+    def vector_search(self, query: str, top_k: int = 3):
         query_vector = self.embeddings.embed_query(query)
 
         results = self.client.query_points(
