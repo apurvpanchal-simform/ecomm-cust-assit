@@ -1,7 +1,6 @@
 import os
 import uuid
 from pathlib import Path
-from dotenv import load_dotenv
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from qdrant_client.http.models import PointStruct
 
@@ -9,7 +8,7 @@ from app.services.search import VectorStore
 
 def ingest_documents():
     store = VectorStore()
-    source_dir = Path("ingestion/documents")
+    source_dir = Path("ingestion/faq_knowledge")
     store.initialize()
     
     documents = []

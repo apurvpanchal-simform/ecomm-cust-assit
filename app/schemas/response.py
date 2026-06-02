@@ -56,9 +56,6 @@ class AgentResponse(BaseModel):
     sources: list[str] = Field(
         default_factory=list, description="Document chunks used to generate the response"
     )
-    sentiment_score: float | None = Field(
-        default=None, description="Customer sentiment (0=calm, 1=furious)"
-    )
     suggested_actions: list[str] = Field(default_factory=list, description="Recommended next steps")
     escalation_reason: str | None = Field(
         default=None, description="Why this was escalated (if applicable)"
