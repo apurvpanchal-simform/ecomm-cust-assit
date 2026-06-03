@@ -1,6 +1,8 @@
 """
-Fetch all orders belonging to a customer.
+Fetch all orders belonging to a customer, with optional status and date filtering.
 """
+
+from typing import Optional
 
 from langchain_core.tools import tool
 
@@ -10,20 +12,34 @@ from app.schemas.order import (
     CustomerOrdersResponse,
 )
 
+
 @tool
-def get_customer_orders(customer_id: str) -> dict:
+def get_customer_orders(
+    customer_id: str,
+    status: Optional[str] = None,
+    from_date: Optional[str] = None,
+    to_date: Optional[str] = None,
+    limit: int = 20,
+) -> dict:
     """
-    Retrieve all orders associated with a customer.
+    Retrieve orders for a customer with optional filters.
 
     Args:
-        customer_id: Unique customer identifier
+        customer_id: Unique customer identifier (injected automatically).
+        status: Optional order status filter (e.g. "delivered", "shipped",
+                "processing", "cancelled").
+        from_date: Optional ISO-8601 start date to filter orders placed on or
+                   after this date (e.g. "2026-01-01").
+        to_date: Optional ISO-8601 end date to filter orders placed on or
+                 before this date (e.g. "2026-06-01").
+        limit: Max number of orders to return (default 20).
 
     Returns:
-        List of customer orders
+        Customer orders matching the filters.
     """
-    supabase=get_supabase_client()
-    
-    result = (
+    supabase = get_supabase_client()
+
+    query = (
         supabase.table("orders")
         .select(
             """
@@ -39,9 +55,16 @@ def get_customer_orders(customer_id: str) -> dict:
             """
         )
         .eq("customer_id", customer_id)
-        .order("created_at", desc=True)
-        .execute()
     )
+
+    if status:
+        query = query.eq("status", status)
+    if from_date:
+        query = query.gte("ordered_at", from_date)
+    if to_date:
+        query = query.lte("ordered_at", to_date)
+
+    result = query.order("ordered_at", desc=True).limit(limit).execute()
 
     orders = [
         OrderSummary(
@@ -53,7 +76,7 @@ def get_customer_orders(customer_id: str) -> dict:
             carrier=row["carrier"],
             estimated_delivery=row["estimated_delivery"],
             delivered_at=row["delivered_at"],
-            return_eligible=row["return_eligible"]
+            return_eligible=row["return_eligible"],
         )
         for row in result.data
     ]
@@ -63,4 +86,4 @@ def get_customer_orders(customer_id: str) -> dict:
         orders=orders,
     )
 
-    return response.model_dump()
+    return response.model_dump(mode="json")

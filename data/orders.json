@@ -187,5 +187,231 @@
     "return_deadline": "2026-06-25T23:59:59Z",
     "notes": "Delivered one day late after carrier delay.",
     "partition_key": "cust-004"
+  },
+  {
+    "id": "ord-1006",
+    "customer_id": "cust-001",
+    "items": [
+      {
+        "product_id": "prod-x001",
+        "name": "Apple AirPods Pro (2nd Generation)",
+        "quantity": 1,
+        "price": 249.00
+      }
+    ],
+    "subtotal": 249.00,
+    "shipping_cost": 0.0,
+    "tax": 20.0,
+    "total": 269.00,
+    "status": "delivered",
+    "payment_status": "paid",
+    "payment": {
+      "status": "paid",
+      "method": "apple_pay",
+      "transaction_id": "txn_1006"
+    },
+    "tracking_number": "1Z999BB10123456785",
+    "carrier": "UPS",
+    "shipment": {
+      "tracking_number": "1Z999BB10123456785",
+      "carrier": "UPS",
+      "status": "delivered",
+      "estimated_delivery": "2026-04-15T20:00:00Z",
+      "delivered_at": "2026-04-14T15:30:00Z"
+    },
+    "ordered_at": "2026-04-10T11:00:00Z",
+    "estimated_delivery": "2026-04-15T20:00:00Z",
+    "delivered_at": "2026-04-14T15:30:00Z",
+    "return_eligible": false,
+    "return_deadline": "2026-05-14T23:59:59Z",
+    "notes": "Left at front door.",
+    "partition_key": "cust-001"
+  },
+  {
+    "id": "ord-1007",
+    "customer_id": "cust-001",
+    "items": [
+      {
+        "product_id": "prod-x002",
+        "name": "Columbia Blue Winter Jacket",
+        "description": "Warm insulated winter jacket",
+        "quantity": 1,
+        "price": 120.00
+      }
+    ],
+    "subtotal": 120.00,
+    "shipping_cost": 10.00,
+    "tax": 10.0,
+    "total": 140.00,
+    "status": "shipped",
+    "payment_status": "paid",
+    "payment": {
+      "status": "paid",
+      "method": "visa_4242",
+      "transaction_id": "txn_1007"
+    },
+    "tracking_number": "9205590164917300000002",
+    "carrier": "USPS",
+    "shipment": {
+      "tracking_number": "9205590164917300000002",
+      "carrier": "USPS",
+      "status": "shipped",
+      "estimated_delivery": "2026-06-10T20:00:00Z"
+    },
+    "ordered_at": "2026-06-01T08:00:00Z",
+    "estimated_delivery": "2026-06-10T20:00:00Z",
+    "return_eligible": true,
+    "return_deadline": "2026-07-10T23:59:59Z",
+    "notes": "Requested expedited shipping.",
+    "partition_key": "cust-001"
+  },
+  {
+    "id": "ord-1008",
+    "customer_id": "cust-001",
+    "items": [
+      {
+        "product_id": "prod-x003",
+        "name": "Generic HDMI Cable",
+        "quantity": 2,
+        "price": 15.00
+      }
+    ],
+    "subtotal": 30.00,
+    "shipping_cost": 5.00,
+    "tax": 2.5,
+    "total": 37.50,
+    "status": "cancelled",
+    "payment_status": "refunded",
+    "payment": {
+      "status": "refunded",
+      "method": "visa_4242",
+      "transaction_id": "txn_1008",
+      "refunded_amount": 37.50
+    },
+    "ordered_at": "2026-05-20T10:00:00Z",
+    "return_eligible": false,
+    "notes": "Cancelled by user before shipping.",
+    "partition_key": "cust-001"
+  },
+  {
+    "id": "ord-1009",
+    "customer_id": "cust-002",
+    "items": [
+      {
+        "product_id": "prod-l001",
+        "name": "Dell XPS 15 Laptop",
+        "quantity": 1,
+        "price": 1499.00
+      },
+      {
+        "product_id": "prod-m002",
+        "name": "Logitech MX Master 3S Mouse",
+        "quantity": 1,
+        "price": 99.99
+      }
+    ],
+    "subtotal": 1598.99,
+    "shipping_cost": 0.0,
+    "tax": 127.92,
+    "total": 1726.91,
+    "status": "delivered",
+    "payment_status": "paid",
+    "payment": {
+      "status": "paid",
+      "method": "mastercard_4444",
+      "transaction_id": "txn_1009"
+    },
+    "tracking_number": "1Z999CC10123456786",
+    "carrier": "UPS",
+    "shipment": {
+      "tracking_number": "1Z999CC10123456786",
+      "carrier": "UPS",
+      "status": "delivered",
+      "estimated_delivery": "2026-06-02T20:00:00Z",
+      "delivered_at": "2026-06-01T11:45:00Z"
+    },
+    "ordered_at": "2026-05-28T14:30:00Z",
+    "estimated_delivery": "2026-06-02T20:00:00Z",
+    "delivered_at": "2026-06-01T11:45:00Z",
+    "return_eligible": true,
+    "return_deadline": "2026-07-01T23:59:59Z",
+    "notes": "Signature required upon delivery.",
+    "partition_key": "cust-002"
+  },
+  {
+    "id": "ord-1010",
+    "customer_id": "cust-003",
+    "items": [
+      {
+        "product_id": "prod-c010",
+        "name": "Breville Barista Express Espresso Machine",
+        "quantity": 1,
+        "price": 699.95
+      }
+    ],
+    "subtotal": 699.95,
+    "shipping_cost": 25.00,
+    "tax": 56.00,
+    "total": 780.95,
+    "status": "shipped",
+    "payment_status": "paid",
+    "payment": {
+      "status": "paid",
+      "method": "amex_0005",
+      "transaction_id": "txn_1010"
+    },
+    "tracking_number": "781234567890",
+    "carrier": "FedEx",
+    "shipment": {
+      "tracking_number": "781234567890",
+      "carrier": "FedEx",
+      "status": "shipped",
+      "estimated_delivery": "2026-06-08T20:00:00Z"
+    },
+    "ordered_at": "2026-06-02T09:15:00Z",
+    "estimated_delivery": "2026-06-08T20:00:00Z",
+    "return_eligible": true,
+    "return_deadline": "2026-07-08T23:59:59Z",
+    "notes": "Heavy item, handling fee included in shipping.",
+    "partition_key": "cust-003"
+  },
+  {
+    "id": "ord-1011",
+    "customer_id": "cust-004",
+    "items": [
+      {
+        "product_id": "prod-b005",
+        "name": "The Great Gatsby Paperback",
+        "quantity": 1,
+        "price": 10.99
+      }
+    ],
+    "subtotal": 10.99,
+    "shipping_cost": 3.99,
+    "tax": 0.88,
+    "total": 15.86,
+    "status": "delivered",
+    "payment_status": "paid",
+    "payment": {
+      "status": "paid",
+      "method": "visa_1111",
+      "transaction_id": "txn_1011"
+    },
+    "tracking_number": "TBA315555000002",
+    "carrier": "Amazon Logistics",
+    "shipment": {
+      "tracking_number": "TBA315555000002",
+      "carrier": "Amazon Logistics",
+      "status": "delivered",
+      "estimated_delivery": "2026-04-05T20:00:00Z",
+      "delivered_at": "2026-04-04T13:20:00Z"
+    },
+    "ordered_at": "2026-03-30T16:40:00Z",
+    "estimated_delivery": "2026-04-05T20:00:00Z",
+    "delivered_at": "2026-04-04T13:20:00Z",
+    "return_eligible": false,
+    "return_deadline": "2026-05-04T23:59:59Z",
+    "notes": "Left in mailbox.",
+    "partition_key": "cust-004"
   }
 ]
