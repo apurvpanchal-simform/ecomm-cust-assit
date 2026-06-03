@@ -3,7 +3,7 @@ from pydantic import BaseModel
 from app.graph.builder import graph
 from fastapi import HTTPException
 from app.schemas.auth import (LoginRequest,LoginResponse,)
-from app.schemas.input import (ChatRequest)
+from app.schemas.input import (ChatRequest,)
 from app.services.auth_service import (generate_jwt,)
 from app.services.customer_service import (CustomerService,)
 from fastapi import Depends
@@ -52,7 +52,7 @@ async def chat(
 
     result = graph.invoke(
         {
-            "query": request.message,
+            "query": request.query,
             "customer_id": customer_id,
         }
     )
