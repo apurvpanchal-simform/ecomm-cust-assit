@@ -1,129 +1,92 @@
-"""Order data models for e-commerce order tracking and management."""
-
+from typing import Optional, Literal, Any
+from pydantic import BaseModel
 from datetime import datetime
-from enum import StrEnum
-
-from pydantic import BaseModel, Field
 
 
-class OrderStatus(StrEnum):
-    """Order lifecycle statuses."""
+# ── Reference helpers (existing) ──────────────────────────────────────
 
-    PENDING = "pending"
-    CONFIRMED = "confirmed"
-    PROCESSING = "processing"
-    SHIPPED = "shipped"
-    IN_TRANSIT = "in_transit"
-    DELIVERED = "delivered"
-    RETURNED = "returned"
-    CANCELLED = "cancelled"
-    REFUNDED = "refunded"
+class OrderReference(BaseModel):
+    reference_type: Literal[
+        "explicit_order_id",
+        "latest_order",
+        "previous_order",
+        "conversation_reference"
+    ]
 
+    order_id: Optional[str] = None
 
-class PaymentStatus(StrEnum):
-    """Payment lifecycle statuses."""
-
-    PENDING = "pending"
-    AUTHORIZED = "authorized"
-    PAID = "paid"
-    FAILED = "failed"
-    REFUNDED = "refunded"
-    PARTIALLY_REFUNDED = "partially_refunded"
+class OrderContextResult(BaseModel):
+    success: bool
+    order_id: Optional[str] = None
+    order: Optional[dict] = None
+    error: Optional[str] = None
 
 
-class OrderItem(BaseModel):
-    """A single item within an order."""
+# ── Summary (used by get_customer_orders / filter) ────────────────────
 
-    product_id: str
-    name: str
-    quantity: int = Field(ge=1)
-    price: float = Field(ge=0)
-    size: str | None = None
-    color: str | None = None
-
-
-class ShippingAddress(BaseModel):
-    """Customer shipping address."""
-
-    street: str
-    city: str
-    state: str
-    zip_code: str
-    country: str = "US"
-
-
-class Payment(BaseModel):
-    """Payment details safe for internal support workflows."""
-
-    status: PaymentStatus = PaymentStatus.PAID
-    method: str | None = None
-    transaction_id: str | None = None
-    refunded_amount: float = Field(default=0.0, ge=0)
-
-
-class Shipment(BaseModel):
-    """Shipment and tracking information for an order."""
-
-    tracking_number: str | None = None
+class OrderSummary(BaseModel):
+    order_id: str
+    status: str
+    payment_status: str
+    total_amount: float
+    ordered_at: datetime
     carrier: str | None = None
-    status: OrderStatus = OrderStatus.PROCESSING
     estimated_delivery: datetime | None = None
     delivered_at: datetime | None = None
+    return_eligible: bool
+
+class CustomerOrdersResponse(BaseModel):
+    customer_id: str
+    orders: list[OrderSummary]
 
 
-class Order(BaseModel):
-    """Full order document — mirrors the Cosmos DB schema."""
+# ── Full detail (used by get_order_details) ───────────────────────────
 
-    id: str
+class OrderItem(BaseModel):
+    """Single line-item inside the `items` JSONB array."""
+    name: str | None = None
+    product_id: str | None = None
+    quantity: int | None = None
+    price: float | None = None
+    image_url: str | None = None
+    variant: str | None = None
+
+class OrderDetail(BaseModel):
+    """Complete representation of a single order including items, pricing, payment, shipping, and returns."""
+    order_id: str
     customer_id: str
     items: list[OrderItem]
-    subtotal: float = Field(ge=0)
-    shipping_cost: float = Field(ge=0, default=0.0)
-    tax: float = Field(ge=0, default=0.0)
-    total: float = Field(ge=0)
-    status: OrderStatus = OrderStatus.PENDING
-    payment_status: PaymentStatus = PaymentStatus.PAID
-    payment: Payment | None = None
+    subtotal: float
+    shipping_cost: float
+    tax: float
+    total: float
+    status: str
+    payment_status: str
+    payment: dict | None = None
+    shipment: dict | None = None
     tracking_number: str | None = None
     carrier: str | None = None
-    shipment: Shipment | None = None
-    shipping_address: ShippingAddress | None = None
     ordered_at: datetime
     estimated_delivery: datetime | None = None
     delivered_at: datetime | None = None
-    return_eligible: bool = True
+    return_eligible: bool
     return_deadline: datetime | None = None
+    days_remaining: int | None = None
     notes: str | None = None
-    partition_key: str = ""  # Same as customer_id for Cosmos DB
-
-    def model_post_init(self, __context) -> None:
-        """Auto-set partition_key from customer_id."""
-        if not self.partition_key:
-            self.partition_key = self.customer_id
 
 
-class OrderHistory(BaseModel):
-    """Aggregated order history for a customer."""
+# ── Item search (used by search_order_items) ──────────────────────────
 
-    customer_id: str
-    orders: list[Order]
-    total_orders: int = 0
-    total_spent: float = 0.0
-
-    def model_post_init(self, __context) -> None:
-        """Compute aggregates from orders list."""
-        if not self.total_orders:
-            self.total_orders = len(self.orders)
-        if not self.total_spent:
-            self.total_spent = sum(o.total for o in self.orders)
-
-
-class ReturnEligibility(BaseModel):
-    """Return eligibility result for order support flows."""
-
+class OrderItemMatch(BaseModel):
+    """A matched item found inside an order."""
     order_id: str
-    eligible: bool
-    reason: str
-    policy_source: str
-    required_next_actions: list[str] = Field(default_factory=list)
-    return_deadline: datetime | None = None
+    order_status: str
+    ordered_at: datetime
+    item: OrderItem
+    order_total: float
+
+
+class OrderItemSearchResponse(BaseModel):
+    customer_id: str
+    keyword: str
+    matches: list[OrderItemMatch]
