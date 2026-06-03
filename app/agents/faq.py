@@ -2,7 +2,6 @@ import os
 
 from dotenv import load_dotenv
 from langsmith import traceable
-from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import BaseModel, Field
 
@@ -15,7 +14,7 @@ load_dotenv()
 SYSTEM_PROMPT = """
 You are a customer support agent for an e-commerce platform.
 
-Answer ONLY using the provided context.
+Answer ONLY using the provided context. Return your answer as a JSON object.
 
 Rules:
 - Do not invent policies or information.
@@ -98,12 +97,15 @@ def faq_node(state: AgentState) -> dict:
         for chunk in chunks
     )
 
-    llm = ChatGoogleGenerativeAI(
+    from langchain_groq import ChatGroq
+    
+    llm = ChatGroq(
         model=os.getenv("PRIMARY_MODEL")
     )
 
     structured_llm = llm.with_structured_output(
-        FAQResponse
+        FAQResponse,
+        method="json_mode"
     )
 
     faq_response = generate_answer(
