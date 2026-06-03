@@ -4,18 +4,6 @@ from enum import StrEnum
 
 from pydantic import BaseModel, Field
 
-from typing import Literal
-
-from app.schemas.product import ProductCard
-
-
-class MasterIntent(StrEnum):
-    """Top-level intent categories for the master supervisor."""
-
-    RECOMMENDATION = "recommendation"
-    SUPPORT = "support"
-
-
 class TicketCategory(StrEnum):
     """Support ticket categories — used by the support supervisor."""
 
@@ -23,30 +11,6 @@ class TicketCategory(StrEnum):
     ORDER = "order"
     ESCALATION = "escalation"
     RECOMMENDATION = "recommendation"
-
-
-class IntentClassification(BaseModel):
-    """Structured output from the master supervisor — classifies top-level intent."""
-
-    intent: MasterIntent
-    confidence: float = Field(ge=0.0, le=1.0)
-    reasoning: str = Field(description="Brief explanation of why this intent was chosen")
-
-
-MasterIntentClassification = IntentClassification
-
-
-class SupportIntentClassification(BaseModel):
-    """Structured output from the support supervisor — classifies support sub-intent."""
-
-    intent: TicketCategory
-    confidence: float = Field(ge=0.0, le=1.0)
-    reasoning: str = Field(description="Brief explanation of the support category")
-
-class RouteDecision(BaseModel):
-    route: Literal["faq", "order"]
-    confidence: float
-
 class AgentResponse(BaseModel):
     """Structured output from support agents — enforced on every response."""
 
