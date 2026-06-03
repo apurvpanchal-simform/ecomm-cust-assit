@@ -1,12 +1,10 @@
-from __future__ import annotations
-
 import os
 from typing import Any
 
 from dotenv import load_dotenv
+from langsmith import traceable
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 from langchain_core.runnables import RunnableConfig
-from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_groq import ChatGroq
 
 from app.graph.state import AgentState
@@ -24,7 +22,7 @@ _ORDER_TOOLS = [
 ]
 _TOOL_MAP: dict[str, Any] = {t.name: t for t in _ORDER_TOOLS}
 
-_SYSTEM_PROMPT = """You are an order support assistant.
+SYSTEM_PROMPT = """You are an order support assistant.
 Help customers look up, understand, and manage their orders.
 
 Each tool below serves a specific domain. Always pick exactly one tool
@@ -65,89 +63,122 @@ Rules:
 7. Be concise but thorough.
 """
 
-def _create_order_agent() -> Any:
+@traceable(name="order_generation")
+def generate_order_response(
+    agent,
+    conversation: list,
+    config: RunnableConfig,
+    customer_id: str,
+) -> tuple[str, list, str | None]:
+    
+    new_messages = []
+    
+    for _ in range(6): # MAX_ITERATIONS
+        response = agent.invoke(conversation, config=config)
+        conversation.append(response)
+        new_messages.append(response)
+
+        if not response.tool_calls:
+            break
+
+        tool_msgs = []
+        for tc in response.tool_calls:
+            args = {**tc.get("args", {}), "customer_id": customer_id}
+            try:
+                result = str(_TOOL_MAP[tc["name"]].invoke(args)).strip() or "No result returned."
+            except Exception as e:
+                result = f"Error: {e}"
+            
+            tool_msgs.append(ToolMessage(content=result, tool_call_id=tc["id"], name=tc["name"]))
+
+        conversation.extend(tool_msgs)
+        new_messages.extend(tool_msgs)
+        
+    else:
+        msg = "I'm having trouble processing your order request. Please try again."
+        new_messages.append(AIMessage(content=msg))
+        return msg, new_messages, "max_iterations_exceeded"
+
+    final_ai = next((m for m in reversed(new_messages) if isinstance(m, AIMessage) and not m.tool_calls), None)
+    
+    if final_ai and isinstance(final_ai.content, list):
+        text = "".join(p.get("text", "") if isinstance(p, dict) else str(p) for p in final_ai.content)
+    else:
+        text = str(final_ai.content) if final_ai else "No response generated."
+
+    return text, new_messages, None
+
+
+@traceable(
+    name="order_node",
+    metadata={
+        "agent": "order",
+    },
+)
+def order_node(state: AgentState, config: RunnableConfig) -> dict:
+    
+    customer_id = state.get("customer_id")
+    
+    if not customer_id:
+        msg = "Unable to verify your identity. Please sign in and try again."
+        agent_response = AgentResponse(
+            resolution_text=msg,
+            confidence_score=1.0,
+            ticket_category=TicketCategory.ORDER,
+            requires_human=False,
+            escalation_reason="missing_customer_id",
+        )
+        return {
+            **state,
+            "messages": [AIMessage(content=msg)],
+            "agent_response": agent_response,
+            "structured_output": agent_response.model_dump(mode="json"),
+            "error": "missing_customer_id",
+        }
+
+    query = state.get("query", "")
+    conversation = [SystemMessage(content=SYSTEM_PROMPT)] + list(state.get("messages", []))
+    
+    if query:
+        msg = HumanMessage(content=query)
+        conversation.append(msg)
+
     model_name = os.getenv("PRIMARY_MODEL")
     if not model_name:
         raise RuntimeError("PRIMARY_MODEL environment variable is not set.")
-    return ChatGroq(model=model_name).bind_tools(_ORDER_TOOLS)
+        
+    llm = ChatGroq(model=model_name)
+    agent = llm.bind_tools(_ORDER_TOOLS)
+    
+    try:
+        resolution_text, new_messages, error = generate_order_response(
+            agent,
+            conversation,
+            config,
+            customer_id
+        )
+        requires_human = error is not None
+        confidence = 0.0 if error else 1.0
 
-def _build_response(
-    state: AgentState,
-    new_messages: list,
-    text: str,
-    confidence: float = 1.0,
-    requires_human: bool = False,
-    error: str | None = None,
-) -> AgentState:
-    resp = AgentResponse(
-        resolution_text=text,
+    except Exception as exc:
+        resolution_text = "Something went wrong while processing your order request."
+        new_messages = [AIMessage(content=resolution_text)]
+        error = str(exc)
+        requires_human = True
+        confidence = 0.0
+
+    agent_response = AgentResponse(
+        resolution_text=resolution_text,
         confidence_score=confidence,
         ticket_category=TicketCategory.ORDER,
         requires_human=requires_human,
         escalation_reason=error,
     )
+
     return {
         **state,
         "messages": new_messages,
-        "agent_response": resp,
-        "structured_output": resp.model_dump(mode="json"),
+        "agent_response": agent_response,
+        "structured_output": agent_response.model_dump(mode="json"),
         "error": error,
     }
-
-def order_node(state: AgentState, config: RunnableConfig) -> AgentState:
-    customer_id = state.get("customer_id")
-    if not customer_id:
-        msg = "Unable to verify your identity. Please sign in and try again."
-        return _build_response(state, [AIMessage(content=msg)], msg, error="missing_customer_id")
-
-    query = state.get("query", "")
-    conversation = [SystemMessage(content=_SYSTEM_PROMPT)] + list(state.get("messages", []))
-    new_messages = []
-
-    if query:
-        msg = HumanMessage(content=query)
-        conversation.append(msg)
-        new_messages.append(msg)
-
-    try:
-        agent = _create_order_agent()
-        
-        for _ in range(6): # MAX_ITERATIONS
-            response = agent.invoke(conversation, config=config)
-            conversation.append(response)
-            new_messages.append(response)
-
-            if not response.tool_calls:
-                break
-
-            tool_msgs = []
-            for tc in response.tool_calls:
-                args = {**tc.get("args", {}), "customer_id": customer_id}
-                try:
-                    result = str(_TOOL_MAP[tc["name"]].invoke(args)).strip() or "No result returned."
-                except Exception as e:
-                    result = f"Error: {e}"
-                
-                tool_msgs.append(ToolMessage(content=result, tool_call_id=tc["id"], name=tc["name"]))
-
-            conversation.extend(tool_msgs)
-            new_messages.extend(tool_msgs)
-            
-        else:
-            msg = "I'm having trouble processing your order request. Please try again."
-            new_messages.append(AIMessage(content=msg))
-            return _build_response(state, new_messages, msg, 0.0, True, "max_iterations_exceeded")
-
-        final_ai = next((m for m in reversed(new_messages) if isinstance(m, AIMessage) and not m.tool_calls), None)
-        
-        if final_ai and isinstance(final_ai.content, list):
-            text = "".join(p.get("text", "") if isinstance(p, dict) else str(p) for p in final_ai.content)
-        else:
-            text = str(final_ai.content) if final_ai else "No response generated."
-
-        return _build_response(state, new_messages, text)
-
-    except Exception as exc:
-        msg = "Something went wrong while processing your order request."
-        new_messages.append(AIMessage(content=msg))
-        return _build_response(state, new_messages, msg, 0.0, True, str(exc))

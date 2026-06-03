@@ -3,6 +3,7 @@ Fetch all orders belonging to a customer, with optional status and date filterin
 """
 
 from typing import Optional
+from langsmith import traceable
 
 from langchain_core.tools import tool
 
@@ -14,6 +15,7 @@ from app.schemas.order import (
 
 
 @tool
+@traceable(name="tool_get_customer_orders")
 def get_customer_orders(
     customer_id: str,
     status: Optional[str] = None,

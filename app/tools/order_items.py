@@ -2,6 +2,7 @@
 Search across all order items for a customer by keyword.
 """
 
+from langsmith import traceable
 from langchain_core.tools import tool
 
 from app.db.supabase import get_supabase_client
@@ -9,6 +10,7 @@ from app.schemas.order import OrderItem, OrderItemMatch, OrderItemSearchResponse
 
 
 @tool
+@traceable(name="tool_search_order_items")
 def search_order_items(customer_id: str, keyword: str) -> dict:
     """
     Search through all of a customer's orders to find items matching a keyword.
