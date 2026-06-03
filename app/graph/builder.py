@@ -5,9 +5,7 @@ from app.graph.state import AgentState
 
 builder = StateGraph(AgentState)
 
-def route_selector(state: AgentState):
-    return state.get("route")
-
+# builder.add_node("faq", faq_node)
 builder.add_node("order", order_node)
 
 builder.add_edge(START, "order")

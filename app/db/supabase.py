@@ -1,10 +1,16 @@
 from supabase import create_client, Client
-import os
 from dotenv import load_dotenv
+import os
 
 load_dotenv()
 
-supabase: Client = create_client(
-    os.getenv('SUPABASE_URL'),
-    os.getenv('SUPABASE_SERVICE_KEY'),
+_supabase: Client = create_client(
+    os.getenv("SUPABASE_URL"),
+    os.getenv("SUPABASE_KEY"),
 )
+
+def get_supabase_client() -> Client:
+    """
+    Return the singleton Supabase client.
+    """
+    return _supabase

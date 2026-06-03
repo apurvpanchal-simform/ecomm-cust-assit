@@ -4,7 +4,7 @@ Fetch all orders belonging to a customer.
 
 from langchain_core.tools import tool
 
-from app.db.supabase import supabase
+from app.db.supabase import get_supabase_client
 from app.schemas.order import (
     OrderSummary,
     CustomerOrdersResponse,
@@ -21,7 +21,8 @@ def get_customer_orders(customer_id: str) -> dict:
     Returns:
         List of customer orders
     """
-
+    supabase=get_supabase_client()
+    
     result = (
         supabase.table("orders")
         .select(
