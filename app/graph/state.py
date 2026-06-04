@@ -4,9 +4,6 @@ from typing import Annotated, Any, TypedDict
 
 from langgraph.graph.message import add_messages
 
-from app.schemas.response import AgentResponse
-
-
 class AgentState(TypedDict, total=False):
     """State passed between graph nodes."""
 
@@ -16,7 +13,7 @@ class AgentState(TypedDict, total=False):
     intent: str
     confidence: float
     query: str
-    agent_response: AgentResponse
+    agent_response: dict[str, Any]
     structured_output: dict[str, Any]
     error: str | None
     final_response: dict[str, Any]
