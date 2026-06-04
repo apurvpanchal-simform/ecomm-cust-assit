@@ -176,7 +176,6 @@ def order_node(state: AgentState, config: RunnableConfig) -> dict:
     )
 
     return {
-        **state,
         "messages": new_messages,
         "agent_response": agent_response.model_dump(mode="json"),
         "structured_output": agent_response.model_dump(mode="json"),
