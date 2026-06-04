@@ -2,10 +2,10 @@
 Fetch all orders belonging to a customer, with optional status and date filtering.
 """
 
-from typing import Optional
+from typing import Optional, Annotated
 from langsmith import traceable
 
-from langchain_core.tools import tool
+from langchain_core.tools import tool, InjectedToolArg
 
 from app.db.supabase import get_supabase_client
 from app.schemas.order import (
@@ -17,7 +17,7 @@ from app.schemas.order import (
 @tool
 @traceable(name="tool_get_customer_orders")
 def get_customer_orders(
-    customer_id: str,
+    customer_id: Annotated[str, InjectedToolArg],
     status: Optional[str] = None,
     from_date: Optional[str] = None,
     to_date: Optional[str] = None,
