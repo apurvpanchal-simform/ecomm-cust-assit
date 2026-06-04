@@ -1,132 +1,126 @@
 import os
+from typing import Any
 
 from dotenv import load_dotenv
 from langsmith import traceable
-from langchain_core.messages import HumanMessage, SystemMessage
-from pydantic import BaseModel, Field
-
-from app.services.search import VectorStore
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
+from langchain_core.runnables import RunnableConfig
+from langchain_groq import ChatGroq
+from app.tools.faq_search import search_faq
 from app.graph.state import AgentState
 from app.schemas.response import AgentResponse, TicketCategory
 
 load_dotenv()
 
-SYSTEM_PROMPT = """
-You are a customer support agent for an e-commerce platform.
+_FAQ_TOOLS = [search_faq]
+_TOOL_MAP: dict[str, Any] = {t.name: t for t in _FAQ_TOOLS}
 
-Answer ONLY using the provided context. Return your answer as a JSON object.
+SYSTEM_PROMPT = """You are a customer support agent for an e-commerce platform.
+Help customers with general questions about policies, shipping, returns, and company operations.
 
 Rules:
-- Do not invent policies or information.
-- If the answer is not in the context, clearly state that.
-- Be professional, concise, and helpful.
-- Suggest next steps when relevant.
-- Extract order_id if present.
-- Set requires_human=True when:
-  - the context does not answer the question,
-  - the user requests a human,
-  - the issue requires manual investigation.
-
-CONTEXT:
-{context}
+1. You MUST use the `search_faq` tool to retrieve context before answering.
+2. Answer ONLY using the provided context from the tool.
+3. Do not invent policies or information.
+4. If the answer is not in the context, clearly state that and suggest contacting human support.
+5. Be professional, concise, and helpful.
+6. Summarize the tool results in natural, friendly language.
 """
 
-class FAQResponse(BaseModel):
-    resolution_text: str
-    confidence_score: float = Field(ge=0.0, le=1.0)
-    requires_human: bool
-    suggested_actions: list[str] = Field(default_factory=list)
-    escalation_reason: str | None = None
-    order_id: str | None = None
-
-@traceable(name="faq_retrieval")
-def retrieve_context(
-    store: VectorStore,
-    query: str,
-):
-    return store.vector_search(
-        query=query,
-        top_k=3,
-    )
-
 @traceable(name="faq_generation")
-def generate_answer(
-    llm,
-    context: str,
-    message: str,
-):
-    return llm.invoke(
-        [
-            SystemMessage(
-                content=SYSTEM_PROMPT.format(
-                    context=context
-                )
-            ),
-            HumanMessage(content=message),
-        ]
-    )
+def generate_faq_response(
+    agent,
+    conversation: list,
+    config: RunnableConfig,
+) -> tuple[str, list, str | None]:
+    
+    new_messages = []
+    
+    for _ in range(6): # MAX_ITERATIONS
+        response = agent.invoke(conversation, config=config)
+        conversation.append(response)
+        new_messages.append(response)
+
+        if not response.tool_calls:
+            break
+
+        tool_msgs = []
+        for tc in response.tool_calls:
+            try:
+                # `search_faq` takes `query` as argument
+                result = str(_TOOL_MAP[tc["name"]].invoke(tc["args"])).strip() or "No result returned."
+            except Exception as e:
+                result = f"Error: {e}"
+            
+            tool_msgs.append(ToolMessage(content=result, tool_call_id=tc["id"], name=tc["name"]))
+
+        conversation.extend(tool_msgs)
+        new_messages.extend(tool_msgs)
+        
+    else:
+        msg = "I'm having trouble processing your question. Please try again."
+        new_messages.append(AIMessage(content=msg))
+        return msg, new_messages, "max_iterations_exceeded"
+
+    final_ai = next((m for m in reversed(new_messages) if isinstance(m, AIMessage) and not m.tool_calls), None)
+    
+    if final_ai and isinstance(final_ai.content, list):
+        text = "".join(p.get("text", "") if isinstance(p, dict) else str(p) for p in final_ai.content)
+    else:
+        text = str(final_ai.content) if final_ai else "No response generated."
+
+    return text, new_messages, None
 
 
 @traceable(
     name="faq_node",
     metadata={
         "agent": "faq",
-        "retrieval_strategy": "cosine",
-        "top_k": 3,
     },
 )
-def faq_node(state: AgentState) -> dict:
-
-    store = VectorStore()
-
-    message = state.get("query", "")
-
-    chunks = retrieve_context(
-        store,
-        message,
-    )
-
-    sources = [
-        chunk.get("source_file", "unknown")
-        for chunk in chunks
-    ]
-
-    context = "\n\n---\n\n".join(
-        f"[Source: {chunk.get('source_file', 'unknown')}]\n"
-        f"{chunk.get('content', '')}"
-        for chunk in chunks
-    )
-
-    from langchain_groq import ChatGroq
+def faq_node(state: AgentState, config: RunnableConfig) -> dict:
     
-    llm = ChatGroq(
-        model=os.getenv("PRIMARY_MODEL")
-    )
+    query = state.get("query", "")
+    conversation = [SystemMessage(content=SYSTEM_PROMPT)] + list(state.get("messages", []))
+    
+    if query:
+        msg = HumanMessage(content=query)
+        conversation.append(msg)
 
-    structured_llm = llm.with_structured_output(
-        FAQResponse,
-        method="json_mode"
-    )
+    model_name = os.getenv("PRIMARY_MODEL")
+    if not model_name:
+        raise RuntimeError("PRIMARY_MODEL environment variable is not set.")
+        
+    llm = ChatGroq(model=model_name)
+    agent = llm.bind_tools(_FAQ_TOOLS)
+    
+    try:
+        resolution_text, new_messages, error = generate_faq_response(
+            agent,
+            conversation,
+            config,
+        )
+        requires_human = error is not None
+        confidence = 0.0 if error else 1.0
 
-    faq_response = generate_answer(
-        structured_llm,
-        context,
-        message,
-    )
+    except Exception as exc:
+        resolution_text = "Something went wrong while processing your request."
+        new_messages = [AIMessage(content=resolution_text)]
+        error = str(exc)
+        requires_human = True
+        confidence = 0.0
 
     agent_response = AgentResponse(
-        resolution_text=faq_response.resolution_text,
-        confidence_score=faq_response.confidence_score,
+        resolution_text=resolution_text,
+        confidence_score=confidence,
         ticket_category=TicketCategory.FAQ,
-        requires_human=faq_response.requires_human,
-        sources=list(set(sources)),
-        suggested_actions=faq_response.suggested_actions,
-        escalation_reason=faq_response.escalation_reason,
-        order_id=faq_response.order_id,
+        requires_human=requires_human,
+        escalation_reason=error,
     )
 
     return {
-        **state,
+        "messages": new_messages,
         "agent_response": agent_response.model_dump(mode="json"),
         "structured_output": agent_response.model_dump(mode="json"),
+        "error": error,
     }
