@@ -2,9 +2,10 @@
 Fetch full details for a single order — items, pricing, payment, shipping, and returns.
 """
 
+from typing import Annotated
 from datetime import datetime, timezone
 from langsmith import traceable
-from langchain_core.tools import tool
+from langchain_core.tools import tool, InjectedToolArg
 
 from app.db.supabase import get_supabase_client
 from app.schemas.order import OrderDetail, OrderItem
@@ -12,7 +13,7 @@ from app.schemas.order import OrderDetail, OrderItem
 
 @tool
 @traceable(name="tool_get_order_details")
-def get_order_details(customer_id: str, order_id: str) -> dict:
+def get_order_details(customer_id: Annotated[str, InjectedToolArg], order_id: str) -> dict:
     """
     Retrieve COMPLETE details for a specific order.
 

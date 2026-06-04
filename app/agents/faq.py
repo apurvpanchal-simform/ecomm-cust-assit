@@ -127,8 +127,6 @@ def faq_node(state: AgentState) -> dict:
 
     return {
         **state,
-        "agent_response": agent_response,
-        "structured_output": agent_response.model_dump(
-            mode="json"
-        ),
+        "agent_response": agent_response.model_dump(mode="json"),
+        "structured_output": agent_response.model_dump(mode="json"),
     }
