@@ -131,7 +131,7 @@ def order_node(state: AgentState, config: RunnableConfig) -> dict:
         return {
             **state,
             "messages": [AIMessage(content=msg)],
-            "agent_response": agent_response,
+            "agent_response": agent_response.model_dump(mode="json"),
             "structured_output": agent_response.model_dump(mode="json"),
             "error": "missing_customer_id",
         }
@@ -178,7 +178,7 @@ def order_node(state: AgentState, config: RunnableConfig) -> dict:
     return {
         **state,
         "messages": new_messages,
-        "agent_response": agent_response,
+        "agent_response": agent_response.model_dump(mode="json"),
         "structured_output": agent_response.model_dump(mode="json"),
         "error": error,
     }
