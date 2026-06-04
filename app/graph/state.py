@@ -17,3 +17,5 @@ class AgentState(TypedDict, total=False):
     structured_output: dict[str, Any]
     error: str | None
     final_response: dict[str, Any]
+    next: str
+

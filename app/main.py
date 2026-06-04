@@ -28,7 +28,7 @@ async def lifespan(app: FastAPI):
     supabase_db_url = os.getenv("SUPABASE_DB_URL")
     
     if not redis_url or not supabase_db_url:
-        print("Error: Missing REDIS_URL or SUPABASE_DB_URL")
+        print("Error: Missing REDIS_URL / SUPABASE_DB_URL")
         app.state.graph = compile_graph() # fallback
         yield
         return
