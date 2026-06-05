@@ -61,6 +61,7 @@ Rules:
 5. Summarize tool results in natural, friendly language.
 6. If a tool fails, explain the issue politely.
 7. Be concise but thorough.
+8. If the exact answer or data you need is already present in the 'Summary of earlier conversation', you may use it directly without making a duplicate tool call.
 """
 
 
@@ -154,13 +155,19 @@ def order_node(state: AgentState, config: RunnableConfig) -> dict:
         }
 
     query = state.get("query", "")
-    conversation = [SystemMessage(content=SYSTEM_PROMPT)] + list(
-        state.get("messages", [])
-    )
-
-    if query:
-        msg = HumanMessage(content=query)
-        conversation.append(msg)
+    # Only keep the last 4 messages for context to prevent bloated
+    # conversations on resumed threads (full history stays in checkpointer).
+    # The query is already in messages as a HumanMessage (added by the /chat endpoint).
+    all_messages = list(state.get("messages", []))
+    recent_messages = all_messages[-4:] if len(all_messages) > 4 else all_messages
+    
+    conversation = [SystemMessage(content=SYSTEM_PROMPT)]
+    
+    chat_summary = state.get("chat_summary", "")
+    if chat_summary:
+        conversation.append(SystemMessage(content=f"Summary of earlier conversation:\n{chat_summary}"))
+        
+    conversation += recent_messages
 
     model_name = os.getenv("PRIMARY_MODEL")
     if not model_name:
