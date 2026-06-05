@@ -19,3 +19,5 @@ class AgentState(TypedDict, total=False):
     error: str | None
     final_response: dict[str, Any]
     next: str
+    chat_summary: str
+    summarized_message_count: int
