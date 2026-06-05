@@ -109,7 +109,7 @@ def send_message(query: str) -> str | None:
             f"{API_BASE_URL}/chat",
             json=payload,
             headers=headers,
-            timeout=60,
+            timeout=120,
         )
         if resp.status_code == 200:
             data = resp.json()
@@ -121,16 +121,14 @@ def send_message(query: str) -> str | None:
 
 
 def extract_response_text(data: dict) -> str:
-    """Extract the human-readable response text from the graph state."""
+    """Extract the human-readable response text from the graph state.
 
-    # Try agent_response first
-    agent_resp = data.get("agent_response")
-    if agent_resp and isinstance(agent_resp, dict):
-        text = agent_resp.get("resolution_text")
-        if text:
-            return text
+    We prioritize the last AI message from the messages list because
+    `agent_response` is a plain dict in the state that persists across
+    checkpointed turns and can return stale answers from a previous run.
+    """
 
-    # Fall back to messages — find the last AI message
+    # Primary: find the last AI message (always the freshest response)
     messages = data.get("messages", [])
     for msg in reversed(messages):
         if isinstance(msg, dict):
@@ -138,10 +136,16 @@ def extract_response_text(data: dict) -> str:
             if msg_type == "ai" and msg.get("content"):
                 return msg["content"]
         elif isinstance(msg, list):
-            # Handle serialized message format
             for item in reversed(msg):
                 if isinstance(item, dict) and item.get("type") == "ai":
                     return item.get("content", "")
+
+    # Fallback: try agent_response
+    agent_resp = data.get("agent_response")
+    if agent_resp and isinstance(agent_resp, dict):
+        text = agent_resp.get("resolution_text")
+        if text:
+            return text
 
     return "I received your message but couldn't generate a response. Please try again."
 
