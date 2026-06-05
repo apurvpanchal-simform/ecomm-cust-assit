@@ -8,18 +8,13 @@ class CustomerService:
 
     def __init__(self):
         self.client: Client = create_client(
-            os.getenv("SUPABASE_URL"),
-            os.getenv("SUPABASE_KEY")
+            os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_KEY")
         )
 
-    def get_customer_by_email(
-        self,
-        email: str
-    ) -> dict | None:
+    def get_customer_by_email(self, email: str) -> dict | None:
 
         response = (
-            self.client
-            .table("customers")
+            self.client.table("customers")
             .select("*")
             .eq("email", email)
             .limit(1)

@@ -12,17 +12,14 @@ from app.services.auth_service import (
 
 security = HTTPBearer()
 
+
 def get_current_customer(
-    credentials: HTTPAuthorizationCredentials = Depends(
-        security
-    ),
+    credentials: HTTPAuthorizationCredentials = Depends(security),
 ) -> str:
 
     try:
 
-        payload = verify_jwt(
-            credentials.credentials
-        )
+        payload = verify_jwt(credentials.credentials)
 
         return payload["sub"]
 
