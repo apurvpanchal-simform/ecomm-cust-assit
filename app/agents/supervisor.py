@@ -51,10 +51,14 @@ def supervisor_node(state: AgentState, config: RunnableConfig) -> dict:
 
     supervisor_messages = [SystemMessage(content=SUPERVISOR_SYSTEM_PROMPT)]
 
-    if query:
-        supervisor_messages.append(HumanMessage(content=f"Initial User Query: {query}"))
+    chat_summary = state.get("chat_summary", "")
+    if chat_summary:
+        supervisor_messages.append(SystemMessage(content=f"Summary of earlier conversation:\n{chat_summary}"))
 
-    for msg in messages:
+    # Only send the last 4 messages to the supervisor for routing decisions.
+    # The query is already in messages as a HumanMessage (added by the /chat endpoint).
+    recent_messages = messages[-4:] if len(messages) > 4 else messages
+    for msg in recent_messages:
         supervisor_messages.append(msg)
 
     try:
@@ -65,6 +69,31 @@ def supervisor_node(state: AgentState, config: RunnableConfig) -> dict:
     except Exception as e:
         print(f"Supervisor LLM Error: {e}")
         next_step = "FINISH"
+
+    # When the supervisor decides FINISH and the last message is from the user
+    # (meaning no agent ran on this turn), we need to generate a brief AI response.
+    # Otherwise extract_response_text will pick up the stale response from the previous turn.
+    if next_step == "FINISH" and messages and hasattr(messages[-1], 'type') and messages[-1].type == 'human':
+        # Generate a brief conversational response
+        brief_llm = ChatGroq(model=model_name, temperature=0.3)
+        brief_messages = [
+            SystemMessage(content="You are a friendly customer support assistant. The user has sent a conversational message (like 'thank you', 'okay', etc.). Respond briefly and warmly. Ask if they need anything else. Keep it to 1-2 sentences."),
+        ]
+        if chat_summary:
+            brief_messages.append(SystemMessage(content=f"Context from earlier conversation:\n{chat_summary}"))
+        brief_messages.append(messages[-1])
+        
+        try:
+            brief_response = brief_llm.invoke(brief_messages, config=config)
+            return {
+                "next": next_step,
+                "messages": [AIMessage(content=brief_response.content)],
+            }
+        except Exception:
+            return {
+                "next": next_step,
+                "messages": [AIMessage(content="You're welcome! Is there anything else I can help you with?")],
+            }
 
     return {"next": next_step}
 

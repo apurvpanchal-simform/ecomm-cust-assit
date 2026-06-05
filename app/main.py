@@ -6,6 +6,7 @@ from contextlib import asynccontextmanager
 from dotenv import load_dotenv
 
 from fastapi import FastAPI, Request, HTTPException, Depends
+from langchain_core.messages import HumanMessage
 
 from psycopg_pool import ConnectionPool
 from psycopg.rows import dict_row
@@ -196,6 +197,7 @@ async def chat(
         {
             "query": chat_request.query,
             "customer_id": customer_id,
+            "messages": [HumanMessage(content=chat_request.query)],
         },
         config=config,
     )
