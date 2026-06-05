@@ -4,6 +4,7 @@ from enum import StrEnum
 
 from pydantic import BaseModel, Field
 
+
 class TicketCategory(StrEnum):
     """Support ticket categories — used by the support supervisor."""
 
@@ -11,6 +12,8 @@ class TicketCategory(StrEnum):
     ORDER = "order"
     ESCALATION = "escalation"
     RECOMMENDATION = "recommendation"
+
+
 class AgentResponse(BaseModel):
     """Structured output from support agents — enforced on every response."""
 
@@ -21,11 +24,16 @@ class AgentResponse(BaseModel):
     ticket_category: TicketCategory = Field(
         description="Classified category of the support interaction"
     )
-    requires_human: bool = Field(default=False, description="Whether this needs human agent review")
-    sources: list[str] = Field(
-        default_factory=list, description="Document chunks used to generate the response"
+    requires_human: bool = Field(
+        default=False, description="Whether this needs human agent review"
     )
-    suggested_actions: list[str] = Field(default_factory=list, description="Recommended next steps")
+    sources: list[str] = Field(
+        default_factory=list,
+        description="Document chunks used to generate the response",
+    )
+    suggested_actions: list[str] = Field(
+        default_factory=list, description="Recommended next steps"
+    )
     escalation_reason: str | None = Field(
         default=None, description="Why this was escalated (if applicable)"
     )

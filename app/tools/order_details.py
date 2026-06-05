@@ -9,11 +9,14 @@ from langchain_core.tools import tool, InjectedToolArg
 
 from app.db.supabase import get_supabase_client
 from app.schemas.order import OrderDetail, OrderItem
+from app.schemas.schema import ToolNotFoundResponse
 
 
 @tool
 @traceable(name="tool_get_order_details")
-def get_order_details(customer_id: Annotated[str, InjectedToolArg], order_id: str) -> dict:
+def get_order_details(
+    customer_id: Annotated[str, InjectedToolArg], order_id: str
+) -> dict:
     """
     Retrieve COMPLETE details for a specific order.
 
@@ -43,12 +46,22 @@ def get_order_details(customer_id: Annotated[str, InjectedToolArg], order_id: st
     )
 
     if not result.data:
-        return {"error": f"Order '{order_id}' not found or does not belong to this customer."}
+        response = ToolNotFoundResponse(
+            error=(
+                f"Hmm, I couldn't find any order matching the ID '{order_id}'. "
+                "It's possible there might be a small typo in the order number, or the order was placed under a different account. "
+                "Could you please double-check the order ID and let me know? I'd be happy to try again!"
+            )
+        )
+        return response.model_dump(mode="json")
 
     row = result.data[0]
 
     raw_items = row.get("items") or []
-    items = [OrderItem(**item) if isinstance(item, dict) else OrderItem(name=str(item)) for item in raw_items]
+    items = [
+        OrderItem(**item) if isinstance(item, dict) else OrderItem(name=str(item))
+        for item in raw_items
+    ]
 
     # Calculate days remaining until return deadline
     days_remaining = None

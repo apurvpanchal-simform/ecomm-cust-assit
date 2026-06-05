@@ -9,6 +9,7 @@ _supabase: Client = create_client(
     os.getenv("SUPABASE_KEY"),
 )
 
+
 def get_supabase_client() -> Client:
     """
     Return the singleton Supabase client.
