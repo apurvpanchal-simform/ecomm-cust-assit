@@ -63,6 +63,7 @@ Rules:
 7. Be concise but thorough.
 """
 
+
 @traceable(name="order_generation")
 def generate_order_response(
     agent,
@@ -70,10 +71,11 @@ def generate_order_response(
     config: RunnableConfig,
     customer_id: str,
 ) -> tuple[str, list, str | None]:
-    
+
     new_messages = []
-    
-    for _ in range(6): # MAX_ITERATIONS
+
+    max_iters = int(os.getenv("MAX_ITERATIONS", "6"))
+    for _ in range(max_iters):
         response = agent.invoke(conversation, config=config)
         conversation.append(response)
         new_messages.append(response)
@@ -85,24 +87,39 @@ def generate_order_response(
         for tc in response.tool_calls:
             args = {**tc.get("args", {}), "customer_id": customer_id}
             try:
-                result = str(_TOOL_MAP[tc["name"]].invoke(args)).strip() or "No result returned."
+                result = (
+                    str(_TOOL_MAP[tc["name"]].invoke(args)).strip()
+                    or "No result returned."
+                )
             except Exception as e:
                 result = f"Error: {e}"
-            
-            tool_msgs.append(ToolMessage(content=result, tool_call_id=tc["id"], name=tc["name"]))
+
+            tool_msgs.append(
+                ToolMessage(content=result, tool_call_id=tc["id"], name=tc["name"])
+            )
 
         conversation.extend(tool_msgs)
         new_messages.extend(tool_msgs)
-        
+
     else:
         msg = "I'm having trouble processing your order request. Please try again."
         new_messages.append(AIMessage(content=msg))
         return msg, new_messages, "max_iterations_exceeded"
 
-    final_ai = next((m for m in reversed(new_messages) if isinstance(m, AIMessage) and not m.tool_calls), None)
-    
+    final_ai = next(
+        (
+            m
+            for m in reversed(new_messages)
+            if isinstance(m, AIMessage) and not m.tool_calls
+        ),
+        None,
+    )
+
     if final_ai and isinstance(final_ai.content, list):
-        text = "".join(p.get("text", "") if isinstance(p, dict) else str(p) for p in final_ai.content)
+        text = "".join(
+            p.get("text", "") if isinstance(p, dict) else str(p)
+            for p in final_ai.content
+        )
     else:
         text = str(final_ai.content) if final_ai else "No response generated."
 
@@ -116,9 +133,9 @@ def generate_order_response(
     },
 )
 def order_node(state: AgentState, config: RunnableConfig) -> dict:
-    
+
     customer_id = state.get("customer_id")
-    
+
     if not customer_id:
         msg = "Unable to verify your identity. Please sign in and try again."
         agent_response = AgentResponse(
@@ -137,8 +154,10 @@ def order_node(state: AgentState, config: RunnableConfig) -> dict:
         }
 
     query = state.get("query", "")
-    conversation = [SystemMessage(content=SYSTEM_PROMPT)] + list(state.get("messages", []))
-    
+    conversation = [SystemMessage(content=SYSTEM_PROMPT)] + list(
+        state.get("messages", [])
+    )
+
     if query:
         msg = HumanMessage(content=query)
         conversation.append(msg)
@@ -146,16 +165,13 @@ def order_node(state: AgentState, config: RunnableConfig) -> dict:
     model_name = os.getenv("PRIMARY_MODEL")
     if not model_name:
         raise RuntimeError("PRIMARY_MODEL environment variable is not set.")
-        
+
     llm = ChatGroq(model=model_name)
     agent = llm.bind_tools(_ORDER_TOOLS)
-    
+
     try:
         resolution_text, new_messages, error = generate_order_response(
-            agent,
-            conversation,
-            config,
-            customer_id
+            agent, conversation, config, customer_id
         )
         requires_human = error is not None
         confidence = 0.0 if error else 1.0

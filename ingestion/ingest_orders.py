@@ -9,10 +9,7 @@ load_dotenv()
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 
-supabase: Client = create_client(
-    SUPABASE_URL,
-    SUPABASE_KEY
-)
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 
 def seed_orders():
@@ -22,25 +19,13 @@ def seed_orders():
     batch_size = 100
 
     for i in range(0, len(orders), batch_size):
-        batch = orders[i:i + batch_size]
+        batch = orders[i : i + batch_size]
 
-        response = (
-            supabase
-            .table("orders")
-            .upsert(
-                batch,
-                on_conflict="id"
-            )
-            .execute()
-        )
+        response = supabase.table("orders").upsert(batch, on_conflict="id").execute()
 
-        print(
-            f"Inserted/Updated {len(response.data)} orders"
-        )
+        print(f"Inserted/Updated {len(response.data)} orders")
 
-    print(
-        f"\nFinished seeding {len(orders)} orders."
-    )
+    print(f"\nFinished seeding {len(orders)} orders.")
 
 
 if __name__ == "__main__":

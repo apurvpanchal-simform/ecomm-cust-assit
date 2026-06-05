@@ -8,11 +8,14 @@ from langchain_core.tools import tool, InjectedToolArg
 
 from app.db.supabase import get_supabase_client
 from app.schemas.order import OrderItem, OrderItemMatch, OrderItemSearchResponse
+from app.schemas.schema import ToolNotFoundResponse
 
 
 @tool
 @traceable(name="tool_search_order_items")
-def search_order_items(customer_id: Annotated[str, InjectedToolArg], keyword: str) -> dict:
+def search_order_items(
+    customer_id: Annotated[str, InjectedToolArg], keyword: str
+) -> dict:
     """
     Search through all of a customer's orders to find items matching a keyword.
 
@@ -53,7 +56,11 @@ def search_order_items(customer_id: Annotated[str, InjectedToolArg], keyword: st
             description = (item_data.get("description") or "").lower()
             variant = (item_data.get("variant") or "").lower()
 
-            if keyword_lower in name or keyword_lower in description or keyword_lower in variant:
+            if (
+                keyword_lower in name
+                or keyword_lower in description
+                or keyword_lower in variant
+            ):
                 matches.append(
                     OrderItemMatch(
                         order_id=row["id"],
@@ -63,6 +70,16 @@ def search_order_items(customer_id: Annotated[str, InjectedToolArg], keyword: st
                         order_total=row["total"],
                     )
                 )
+
+    if not matches:
+        response = ToolNotFoundResponse(
+            message=(
+                f"I've looked through your past orders, but I couldn't find anything matching '{keyword}'. "
+                "It might be listed under a slightly different name or spelling, or perhaps it was ordered from a different account. "
+                "If you can think of another name for it, I'd be happy to search again!"
+            )
+        )
+        return response.model_dump(mode="json")
 
     response = OrderItemSearchResponse(
         customer_id=customer_id,

@@ -12,6 +12,7 @@ from app.schemas.order import (
     OrderSummary,
     CustomerOrdersResponse,
 )
+from app.schemas.schema import ToolNotFoundResponse
 
 
 @tool
@@ -41,10 +42,7 @@ def get_customer_orders(
     """
     supabase = get_supabase_client()
 
-    query = (
-        supabase.table("orders")
-        .select(
-            """
+    query = supabase.table("orders").select("""
             id,
             status,
             payment_status,
@@ -54,10 +52,7 @@ def get_customer_orders(
             estimated_delivery,
             delivered_at,
             return_eligible
-            """
-        )
-        .eq("customer_id", customer_id)
-    )
+            """).eq("customer_id", customer_id)
 
     if status:
         query = query.eq("status", status)
@@ -67,6 +62,16 @@ def get_customer_orders(
         query = query.lte("ordered_at", to_date)
 
     result = query.order("ordered_at", desc=True).limit(limit).execute()
+
+    if not result.data:
+        response = ToolNotFoundResponse(
+            message=(
+                "I couldn't find any orders that match your current search criteria. "
+                "This could be because no orders were placed during that specific timeframe, or perhaps none of your orders currently have that status. "
+                "If you'd like, you can try adjusting the date range or status, and I'll gladly check again for you!"
+            )
+        )
+        return response.model_dump(mode="json")
 
     orders = [
         OrderSummary(

@@ -18,16 +18,46 @@ class DualCheckpointer(BaseCheckpointSaver):
         self.redis_saver = redis_saver
         self.postgres_saver = postgres_saver
 
-    def get_tuple(self, config: RunnableConfig) -> Optional[CheckpointTuple]:
-        # 1. Try fetching from Redis first. 
-        # This is where the magic happens for speed: reading from RAM is microseconds fast.
+    def get_tuple(
+        self,
+        config: RunnableConfig,
+    ) -> Optional[CheckpointTuple]:
+
+        thread_id = (
+            config.get("configurable", {})
+            .get("thread_id")
+        )
+
+        print(f"\nTHREAD_ID={thread_id}")
+
         tuple_ = self.redis_saver.get_tuple(config)
+
         if tuple_ is not None:
+            print("⚡ REDIS HIT")
             return tuple_
+
+        print("❌ REDIS MISS")
+
+        tuple_ = self.postgres_saver.get_tuple(config)
+
+        if tuple_ is not None:
+            print("🐘 POSTGRES HIT")
+        else:
+            print("❌ POSTGRES MISS")
+
+        return tuple_
+
+
+    # def get_tuple(self, config: RunnableConfig) -> Optional[CheckpointTuple]:
+    #     # 1. Try fetching from Redis first. 
+    #     # This is where the magic happens for speed: reading from RAM is microseconds fast.
+    #     tuple_ = self.redis_saver.get_tuple(config)
+    #     if tuple_ is not None:
+    #         return tuple_
             
-        # 2. Fall back to Postgres if not found in Redis (e.g., if Redis data expired or was evicted).
-        # This involves a disk read, which is slower, but guarantees we don't lose old chats.
-        return self.postgres_saver.get_tuple(config)
+    #     # 2. Fall back to Postgres if not found in Redis (e.g., if Redis data expired or was evicted).
+    #     # This involves a disk read, which is slower, but guarantees we don't lose old chats.
+    #     return self.postgres_saver.get_tuple(config)
 
     def list(
         self,

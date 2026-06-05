@@ -4,6 +4,7 @@ from typing import Annotated, Any, TypedDict
 
 from langgraph.graph.message import add_messages
 
+
 class AgentState(TypedDict, total=False):
     """State passed between graph nodes."""
 
@@ -18,4 +19,3 @@ class AgentState(TypedDict, total=False):
     error: str | None
     final_response: dict[str, Any]
     next: str
-

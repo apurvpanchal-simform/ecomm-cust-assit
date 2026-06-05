@@ -27,16 +27,18 @@ Rules:
 6. Summarize the tool results in natural, friendly language.
 """
 
+
 @traceable(name="faq_generation")
 def generate_faq_response(
     agent,
     conversation: list,
     config: RunnableConfig,
 ) -> tuple[str, list, str | None]:
-    
+
     new_messages = []
-    
-    for _ in range(6): # MAX_ITERATIONS
+
+    max_iters = int(os.getenv("MAX_ITERATIONS", "6"))
+    for _ in range(max_iters):
         response = agent.invoke(conversation, config=config)
         conversation.append(response)
         new_messages.append(response)
@@ -48,24 +50,39 @@ def generate_faq_response(
         for tc in response.tool_calls:
             try:
                 # `search_faq` takes `query` as argument
-                result = str(_TOOL_MAP[tc["name"]].invoke(tc["args"])).strip() or "No result returned."
+                result = (
+                    str(_TOOL_MAP[tc["name"]].invoke(tc["args"])).strip()
+                    or "No result returned."
+                )
             except Exception as e:
                 result = f"Error: {e}"
-            
-            tool_msgs.append(ToolMessage(content=result, tool_call_id=tc["id"], name=tc["name"]))
+
+            tool_msgs.append(
+                ToolMessage(content=result, tool_call_id=tc["id"], name=tc["name"])
+            )
 
         conversation.extend(tool_msgs)
         new_messages.extend(tool_msgs)
-        
+
     else:
         msg = "I'm having trouble processing your question. Please try again."
         new_messages.append(AIMessage(content=msg))
         return msg, new_messages, "max_iterations_exceeded"
 
-    final_ai = next((m for m in reversed(new_messages) if isinstance(m, AIMessage) and not m.tool_calls), None)
-    
+    final_ai = next(
+        (
+            m
+            for m in reversed(new_messages)
+            if isinstance(m, AIMessage) and not m.tool_calls
+        ),
+        None,
+    )
+
     if final_ai and isinstance(final_ai.content, list):
-        text = "".join(p.get("text", "") if isinstance(p, dict) else str(p) for p in final_ai.content)
+        text = "".join(
+            p.get("text", "") if isinstance(p, dict) else str(p)
+            for p in final_ai.content
+        )
     else:
         text = str(final_ai.content) if final_ai else "No response generated."
 
@@ -79,10 +96,12 @@ def generate_faq_response(
     },
 )
 def faq_node(state: AgentState, config: RunnableConfig) -> dict:
-    
+
     query = state.get("query", "")
-    conversation = [SystemMessage(content=SYSTEM_PROMPT)] + list(state.get("messages", []))
-    
+    conversation = [SystemMessage(content=SYSTEM_PROMPT)] + list(
+        state.get("messages", [])
+    )
+
     if query:
         msg = HumanMessage(content=query)
         conversation.append(msg)
@@ -90,10 +109,10 @@ def faq_node(state: AgentState, config: RunnableConfig) -> dict:
     model_name = os.getenv("PRIMARY_MODEL")
     if not model_name:
         raise RuntimeError("PRIMARY_MODEL environment variable is not set.")
-        
+
     llm = ChatGroq(model=model_name)
     agent = llm.bind_tools(_FAQ_TOOLS)
-    
+
     try:
         resolution_text, new_messages, error = generate_faq_response(
             agent,

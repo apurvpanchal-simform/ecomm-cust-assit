@@ -106,7 +106,9 @@ class ProductCard(BaseModel):
 class ProductQuery(BaseModel):
     """Structured product search query — translated from natural language by the LLM."""
 
-    query_text: str | None = Field(default=None, description="Original natural language query")
+    query_text: str | None = Field(
+        default=None, description="Original natural language query"
+    )
     category: str | None = None
     subcategory: str | None = None
     brand: str | None = None
