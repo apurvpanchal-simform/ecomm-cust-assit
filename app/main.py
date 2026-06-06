@@ -193,12 +193,16 @@ async def chat(
         }
     }
 
+    state_input = {
+        "query": chat_request.query,
+        "customer_id": customer_id,
+        "messages": [HumanMessage(content=chat_request.query)],
+    }
+    if chat_request.image_base64:
+        state_input["image_base64"] = chat_request.image_base64
+
     result = request.app.state.graph.invoke(
-        {
-            "query": chat_request.query,
-            "customer_id": customer_id,
-            "messages": [HumanMessage(content=chat_request.query)],
-        },
+        state_input,
         config=config,
     )
 

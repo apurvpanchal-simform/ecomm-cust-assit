@@ -93,13 +93,16 @@ def login(email: str) -> bool:
         return False
 
 
-def send_message(query: str) -> str | None:
+def send_message(query: str, image_b64: str = None) -> str | None:
     """Send a chat message to the backend and return the AI response text."""
     if not st.session_state.jwt_token:
         return None
 
     headers = {"Authorization": f"Bearer {st.session_state.jwt_token}"}
     payload = {"query": query}
+    
+    if image_b64:
+        payload["image_base64"] = image_b64
 
     if st.session_state.conversation_id:
         payload["conversation_id"] = st.session_state.conversation_id
@@ -257,21 +260,44 @@ if not st.session_state.jwt_token:
     )
 else:
     # Display existing chat history
-    for message in st.session_state.messages:
-        with st.chat_message(message["role"]):
-            st.markdown(message["content"])
+    if not st.session_state.messages:
+        with st.chat_message("assistant"):
+            st.markdown(
+                "Welcome! 👋 I'm your **E-Commerce Customer Support Assistant**.\n\n"
+                "Here are a few things I can help you with:\n"
+                "- 📦 **Order Inquiries:** *'What is the status of my order?'* or *'Show me my recent purchases.'*\n"
+                "- ❓ **FAQs & Policies:** *'What is your return policy?'* or *'How long does shipping take?'*\n"
+                "- 📸 **Visual Product Search:** *Upload an image of a product to find similar items in our catalog!*\n\n"
+                "How can I help you today?"
+            )
+    else:
+        for message in st.session_state.messages:
+            with st.chat_message(message["role"]):
+                st.markdown(message["content"])
 
     # Chat input
-    if prompt := st.chat_input("Ask me about your orders or our policies..."):
+    uploaded_file = st.file_uploader("Upload an image (optional)", type=["png", "jpg", "jpeg"])
+    prompt = st.chat_input("Ask me about your orders or our policies...")
+    
+    if prompt or uploaded_file:
+        actual_prompt = prompt or "Can you find products similar to this image?"
+        
+        image_b64 = None
+        if uploaded_file:
+            import base64
+            image_b64 = base64.b64encode(uploaded_file.read()).decode("utf-8")
+            
         # Add user message to history and display it
-        st.session_state.messages.append({"role": "user", "content": prompt})
+        st.session_state.messages.append({"role": "user", "content": actual_prompt})
         with st.chat_message("user"):
-            st.markdown(prompt)
+            st.markdown(actual_prompt)
+            if uploaded_file:
+                st.image(uploaded_file, width=200)
 
         # Get AI response
         with st.chat_message("assistant"):
             with st.spinner("Thinking..."):
-                response_text = send_message(prompt)
+                response_text = send_message(actual_prompt, image_b64)
 
             if response_text:
                 st.markdown(response_text)

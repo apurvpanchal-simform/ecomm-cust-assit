@@ -21,3 +21,12 @@ class AgentState(TypedDict, total=False):
     next: str
     chat_summary: str
     summarized_message_count: int
+
+    # Multimodal search fields
+    image_base64: str | None
+    image_azure_url: str | None
+    image_tags: list[str] | None
+    image_embedding: list[float] | None
+    image_is_safe: bool | None
+    visual_results: list[dict[str, Any]] | None
+    active_filters: dict[str, Any] | None
