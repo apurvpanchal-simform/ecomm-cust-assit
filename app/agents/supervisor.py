@@ -30,7 +30,7 @@ RULES:
 
 
 class Route(BaseModel):
-    next: Literal["faq", "order", "out_of_domain", "FINISH"] = Field(
+    next: Literal["faq", "order", "visual_search_agent", "out_of_domain", "FINISH"] = Field(
         description="The next agent to call, 'out_of_domain' if the query is unrelated, or 'FINISH' if resolved."
     )
 
@@ -41,6 +41,11 @@ def supervisor_node(state: AgentState, config: RunnableConfig) -> dict:
 
     query = state.get("query", "")
     messages = state.get("messages", [])
+
+    # Short-circuit: if an image is present, route to visual search pipeline
+    if state.get("image_base64"):
+        return {"next": "visual_search_agent"}
+
 
     model_name = os.getenv("PRIMARY_MODEL")
     if not model_name:
@@ -64,7 +69,7 @@ def supervisor_node(state: AgentState, config: RunnableConfig) -> dict:
     try:
         response = structured_llm.invoke(supervisor_messages, config=config)
         next_step = response.next.strip()
-        if next_step not in ["faq", "order", "out_of_domain", "FINISH"]:
+        if next_step not in ["faq", "order", "visual_search_agent", "out_of_domain", "FINISH"]:
             next_step = "FINISH"
     except Exception as e:
         print(f"Supervisor LLM Error: {e}")
