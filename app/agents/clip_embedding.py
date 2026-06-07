@@ -1,11 +1,12 @@
+import asyncio
 from typing import Any
 from app.services.clip_embedder import embed_image_base64, embed_text
 
-def clip_embedding_node(state: Any) -> dict:
+async def clip_embedding_node(state: Any) -> dict:
     """Generate CLIP embedding — pure image OR text-only."""
     # If there's an image, we use image to search
     if state.get("image_base64"):
-        vector = embed_image_base64(state["image_base64"])
+        vector = await asyncio.to_thread(embed_image_base64, state["image_base64"])
         return {"image_embedding": vector}
         
     # If no image, we check if there's a text query to search visually
@@ -26,5 +27,5 @@ def clip_embedding_node(state: Any) -> dict:
         return {}
         
     # Embed the text using CLIP to search for images matching the text
-    vector = embed_text(user_text)
+    vector = await asyncio.to_thread(embed_text, user_text)
     return {"image_embedding": vector}

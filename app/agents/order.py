@@ -8,7 +8,7 @@ from langchain_core.runnables import RunnableConfig
 from langchain_groq import ChatGroq
 
 from app.graph.state import AgentState
-from app.schemas.response import AgentResponse, TicketCategory
+from app.schemas.agent import AgentResponse, TicketCategory
 from app.tools.order_lookup import get_customer_orders
 from app.tools.order_details import get_order_details
 from app.tools.order_items import search_order_items
@@ -59,14 +59,14 @@ Rules:
    call get_customer_orders with limit=1 to find the order ID, then use
    the appropriate tool for follow-up details.
 5. Summarize tool results in natural, friendly language.
-6. If a tool fails, explain the issue politely.
+6. If a tool fails or returns an Error, DO NOT call it again. Explain the issue politely.
 7. Be concise but thorough.
 8. If the exact answer or data you need is already present in the 'Summary of earlier conversation', you may use it directly without making a duplicate tool call.
 """
 
 
 @traceable(name="order_generation")
-def generate_order_response(
+async def generate_order_response(
     agent,
     conversation: list,
     config: RunnableConfig,
@@ -77,7 +77,7 @@ def generate_order_response(
 
     max_iters = int(os.getenv("MAX_ITERATIONS", "6"))
     for _ in range(max_iters):
-        response = agent.invoke(conversation, config=config)
+        response = await agent.ainvoke(conversation, config=config)
         conversation.append(response)
         new_messages.append(response)
 
@@ -89,7 +89,7 @@ def generate_order_response(
             args = {**tc.get("args", {}), "customer_id": customer_id}
             try:
                 result = (
-                    str(_TOOL_MAP[tc["name"]].invoke(args)).strip()
+                    str(await _TOOL_MAP[tc["name"]].ainvoke(args)).strip()
                     or "No result returned."
                 )
             except Exception as e:
@@ -133,14 +133,25 @@ def generate_order_response(
         "agent": "order",
     },
 )
-def order_node(state: AgentState, config: RunnableConfig) -> dict:
+async def order_node(state: AgentState, config: RunnableConfig) -> dict:
 
     customer_id = state.get("customer_id")
 
     if not customer_id:
         msg = "Unable to verify your identity. Please sign in and try again."
+        
+        all_messages = list(state.get("messages", []))
+        last_msg = all_messages[-1] if all_messages else None
+        if last_msg and hasattr(last_msg, 'type') and last_msg.type == "ai":
+            merged_content = f"{last_msg.content}\n\n{msg}"
+            new_msgs = [AIMessage(content=merged_content, id=last_msg.id)]
+            final_msg = merged_content
+        else:
+            new_msgs = [AIMessage(content=msg)]
+            final_msg = msg
+            
         agent_response = AgentResponse(
-            resolution_text=msg,
+            resolution_text=final_msg,
             confidence_score=1.0,
             ticket_category=TicketCategory.ORDER,
             requires_human=False,
@@ -148,18 +159,19 @@ def order_node(state: AgentState, config: RunnableConfig) -> dict:
         )
         return {
             **state,
-            "messages": [AIMessage(content=msg)],
+            "messages": new_msgs,
             "agent_response": agent_response.model_dump(mode="json"),
             "structured_output": agent_response.model_dump(mode="json"),
             "error": "missing_customer_id",
+            "executed_agents": state.get("executed_agents", []) + ["order"],
         }
 
     query = state.get("query", "")
-    # Only keep the last 4 messages for context to prevent bloated
+    # Only keep the last 12 messages for context to prevent bloated
     # conversations on resumed threads (full history stays in checkpointer).
     # The query is already in messages as a HumanMessage (added by the /chat endpoint).
     all_messages = list(state.get("messages", []))
-    recent_messages = all_messages[-4:] if len(all_messages) > 4 else all_messages
+    recent_messages = all_messages[-12:] if len(all_messages) > 12 else all_messages
     
     conversation = [SystemMessage(content=SYSTEM_PROMPT)]
     
@@ -169,29 +181,49 @@ def order_node(state: AgentState, config: RunnableConfig) -> dict:
         
     conversation += recent_messages
 
-    model_name = os.getenv("PRIMARY_MODEL")
-    if not model_name:
-        raise RuntimeError("PRIMARY_MODEL environment variable is not set.")
-
-    llm = ChatGroq(model=model_name)
+    from app.services.llm import get_llm
+    llm = get_llm(temperature=0.1)
     agent = llm.bind_tools(_ORDER_TOOLS)
 
     try:
-        resolution_text, new_messages, error = generate_order_response(
+        resolution_text, new_messages, error = await generate_order_response(
             agent, conversation, config, customer_id
         )
+        
+        final_ai_idx = -1
+        for i in range(len(new_messages) - 1, -1, -1):
+            if isinstance(new_messages[i], AIMessage) and not new_messages[i].tool_calls:
+                final_ai_idx = i
+                break
+                
+        last_msg = all_messages[-1] if all_messages else None
+        if last_msg and hasattr(last_msg, 'type') and last_msg.type == "ai" and final_ai_idx != -1:
+            merged_content = f"{last_msg.content}\n\n{new_messages[final_ai_idx].content}"
+            new_messages[final_ai_idx] = AIMessage(content=merged_content, id=last_msg.id)
+            final_resolution_text = merged_content
+        else:
+            final_resolution_text = resolution_text
+            
         requires_human = error is not None
         confidence = 0.0 if error else 1.0
 
     except Exception as exc:
         resolution_text = "Something went wrong while processing your order request."
-        new_messages = [AIMessage(content=resolution_text)]
+        last_msg = all_messages[-1] if all_messages else None
+        if last_msg and hasattr(last_msg, 'type') and last_msg.type == "ai":
+            merged_content = f"{last_msg.content}\n\n{resolution_text}"
+            new_messages = [AIMessage(content=merged_content, id=last_msg.id)]
+            final_resolution_text = merged_content
+        else:
+            new_messages = [AIMessage(content=resolution_text)]
+            final_resolution_text = resolution_text
+            
         error = str(exc)
         requires_human = True
         confidence = 0.0
 
     agent_response = AgentResponse(
-        resolution_text=resolution_text,
+        resolution_text=final_resolution_text,
         confidence_score=confidence,
         ticket_category=TicketCategory.ORDER,
         requires_human=requires_human,
@@ -203,4 +235,5 @@ def order_node(state: AgentState, config: RunnableConfig) -> dict:
         "agent_response": agent_response.model_dump(mode="json"),
         "structured_output": agent_response.model_dump(mode="json"),
         "error": error,
+        "executed_agents": state.get("executed_agents", []) + ["order"],
     }

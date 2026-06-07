@@ -4,6 +4,7 @@ Usage: python ingestion/index_catalog.py
 """
 import requests
 from qdrant_client.models import PointStruct
+import asyncio
 import os
 import sys
 import uuid
@@ -12,8 +13,7 @@ from dotenv import load_dotenv
 # Ensure app is in path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from app.db.qdrant_setup import create_product_images_collection
-from qdrant_client import QdrantClient
+from app.db.qdrant import get_qdrant_client, ensure_product_images_collection
 from app.services.clip_embedder import embed_image_bytes
 from app.services.azure_blob import upload_product_image
 from supabase import create_client
@@ -21,12 +21,11 @@ from supabase import create_client
 load_dotenv()
 
 supabase = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_KEY"])
-qdrant_url = os.environ.get("QDRANT_URL", "http://localhost:6333")
-qdrant = QdrantClient(url=qdrant_url)
+qdrant = get_qdrant_client()
 
-def index_all_products():
+async def index_all_products():
     # Make sure collection exists
-    create_product_images_collection()
+    await ensure_product_images_collection()
     
     # Fetch all products from Supabase
     products = supabase.table("products").select("*").execute().data
@@ -73,10 +72,10 @@ def index_all_products():
     # Batch upsert into Qdrant (100 at a time)
     if points:
         for i in range(0, len(points), 100):
-            qdrant.upsert(collection_name="product_images", points=points[i:i+100])
+            await qdrant.upsert(collection_name="product_images", points=points[i:i+100])
             print(f"✅ Indexed {min(i+100, len(points))}/{len(points)}")
     else:
         print("No points to index.")
 
 if __name__ == "__main__":
-    index_all_products()
+    asyncio.run(index_all_products())

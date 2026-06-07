@@ -21,6 +21,8 @@ class AgentState(TypedDict, total=False):
     next: str
     chat_summary: str
     summarized_message_count: int
+    pending_agents: list[str]
+    executed_agents: list[str]
 
     # Multimodal search fields
     image_base64: str | None

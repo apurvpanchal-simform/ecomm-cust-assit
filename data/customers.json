@@ -13,5 +13,10 @@
     "customer_id": "cust-003",
     "email": "test3@gmail.com",
     "name": "Alice Johnson"
+  },
+  {
+    "customer_id": "cust-004",
+    "email": "test4@gmail.com",
+    "name": "Bob Williams"
   }
 ]

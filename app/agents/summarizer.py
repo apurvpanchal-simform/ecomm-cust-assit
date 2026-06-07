@@ -16,14 +16,26 @@ Keep the summary concise but ensure no important details (like order numbers, sp
 Return ONLY the updated summary text.
 """
 
-def summarizer_node(state: AgentState, config: RunnableConfig) -> dict:
+def _transient_cleanup() -> dict:
+    """Return a dict that clears bulky transient fields to keep checkpoints lean."""
+    return {
+        "image_base64": None,
+        "image_embedding": None,
+        "visual_results": None,
+        "image_tags": None,
+        "image_azure_url": None,
+        "image_is_safe": None,
+        "active_filters": None,
+    }
+
+async def summarizer_node(state: AgentState, config: RunnableConfig) -> dict:
     """Updates the running summary of the conversation if needed."""
     all_messages = state.get("messages", [])
     summarized_count = state.get("summarized_message_count", 0)
     current_summary = state.get("chat_summary", "")
     
-    WINDOW_SIZE = 4
-    CHUNK_SIZE = 2
+    WINDOW_SIZE = 12
+    CHUNK_SIZE = 6
     
     # We want to keep the last WINDOW_SIZE messages completely unsummarized.
     # To prevent "telephone" effect, we wait until we have CHUNK_SIZE extra messages
@@ -41,11 +53,8 @@ def summarizer_node(state: AgentState, config: RunnableConfig) -> dict:
             
         new_content_text = "\n\n".join(formatted_messages)
         
-        model_name = os.getenv("PRIMARY_MODEL")
-        if not model_name:
-            raise RuntimeError("PRIMARY_MODEL environment variable is not set.")
-            
-        llm = ChatGroq(model=model_name, temperature=0.0)
+        from app.services.llm import get_llm
+        llm = get_llm(temperature=0.0)
         
         prompt_messages = [SystemMessage(content=SUMMARIZER_PROMPT)]
         
@@ -55,19 +64,29 @@ def summarizer_node(state: AgentState, config: RunnableConfig) -> dict:
         prompt_messages.append(HumanMessage(content=f"New messages to incorporate into the summary:\n{new_content_text}"))
         
         try:
-            response = llm.invoke(prompt_messages, config=config)
+            response = await llm.ainvoke(prompt_messages, config=config)
             new_summary = response.content
             # The new summarized count should include all messages we just summarized
             new_summarized_count = summarized_count + len(messages_to_summarize)
                         
             return {
                 "chat_summary": new_summary,
-                "summarized_message_count": new_summarized_count
+                "summarized_message_count": new_summarized_count,
+                # Clear transient fields to keep checkpoints lean
+                "image_base64": None,
+                "image_embedding": None,
+                "visual_results": None,
+                "image_tags": None,
+                "image_azure_url": None,
+                "image_is_safe": None,
+                "active_filters": None,
             }
         except Exception as e:
-            print(f"[SUMMARIZER] LLM Error: {e}")
-            return {}
+            import logging
+            logging.getLogger(__name__).exception(f"[SUMMARIZER] LLM Error: {e}")
+            return _transient_cleanup()
             
     # If no summarization is needed, return an empty dict (state unchanged)
-    print(f"[SUMMARIZER] Sleeping. Total msgs: {len(all_messages)}, Summarized: {summarized_count}")
-    return {}
+    import logging
+    logging.getLogger(__name__).debug(f"[SUMMARIZER] Sleeping. Total msgs: {len(all_messages)}, Summarized: {summarized_count}")
+    return _transient_cleanup()

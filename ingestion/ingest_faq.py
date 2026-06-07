@@ -1,16 +1,21 @@
 import os
+import asyncio
+import sys
 import uuid
 from pathlib import Path
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from qdrant_client.http.models import PointStruct
 
+# Ensure root directory is in path so we can import 'app'
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from app.services.search import VectorStore
 
 
-def ingest_documents():
+async def ingest_documents():
     store = VectorStore()
     source_dir = Path("ingestion/faq_knowledge")
-    store.initialize()
+    await store.initialize()
 
     documents = []
     for path in source_dir.glob("*.md"):
@@ -34,9 +39,9 @@ def ingest_documents():
             )
 
     if points:
-        store.client.upsert(collection_name=store.collection_name, points=points)
+        await store.client.upsert(collection_name=store.collection_name, points=points)
         print(f"Ingested {len(points)} chunks into Qdrant !")
 
 
 if __name__ == "__main__":
-    ingest_documents()
+    asyncio.run(ingest_documents())

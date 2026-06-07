@@ -12,12 +12,12 @@ from app.schemas.order import (
     OrderSummary,
     CustomerOrdersResponse,
 )
-from app.schemas.schema import ToolNotFoundResponse
+from app.schemas.agent import ToolNotFoundResponse
 
 
 @tool
 @traceable(name="tool_get_customer_orders")
-def get_customer_orders(
+async def get_customer_orders(
     customer_id: Annotated[str, InjectedToolArg],
     status: Optional[str] = None,
     from_date: Optional[str] = None,
@@ -40,7 +40,7 @@ def get_customer_orders(
     Returns:
         Customer orders matching the filters.
     """
-    supabase = get_supabase_client()
+    supabase = await get_supabase_client()
 
     query = supabase.table("orders").select("""
             id,
@@ -61,7 +61,7 @@ def get_customer_orders(
     if to_date:
         query = query.lte("ordered_at", to_date)
 
-    result = query.order("ordered_at", desc=True).limit(limit).execute()
+    result = await query.order("ordered_at", desc=True).limit(limit).execute()
 
     if not result.data:
         response = ToolNotFoundResponse(

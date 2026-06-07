@@ -1,11 +1,7 @@
 import os
 from typing import Any
-from qdrant_client import QdrantClient
+from app.db.qdrant import get_qdrant_client
 from qdrant_client.models import Filter, FieldCondition, Range
-
-def get_qdrant_client():
-    qdrant_url = os.environ.get("QDRANT_URL", "http://localhost:6333")
-    return QdrantClient(url=qdrant_url)
 
 def build_filters(active_filters: dict | None):
     if not active_filters:
@@ -19,7 +15,7 @@ def build_filters(active_filters: dict | None):
     
     return Filter(must=conditions) if conditions else None
 
-def visual_search_node(state: Any) -> dict:
+async def visual_search_node(state: Any) -> dict:
     """Search Qdrant product_images collection with CLIP vector."""
     if not state.get("image_embedding"):
         return {}
@@ -30,7 +26,7 @@ def visual_search_node(state: Any) -> dict:
     filters = build_filters(state.get("active_filters", {}))
 
     try:
-        response = qdrant.query_points(
+        response = await qdrant.query_points(
             collection_name="product_images",
             query=state["image_embedding"],
             query_filter=filters,
@@ -45,5 +41,6 @@ def visual_search_node(state: Any) -> dict:
             
         return {"visual_results": ranked}
     except Exception as e:
-        print(f"Visual search error: {e}")
+        import logging
+        logging.getLogger(__name__).exception(f"Visual search error: {e}")
         return {"visual_results": []}
