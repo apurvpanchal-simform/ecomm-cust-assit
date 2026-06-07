@@ -9,12 +9,12 @@ from langchain_core.tools import tool, InjectedToolArg
 
 from app.db.supabase import get_supabase_client
 from app.schemas.order import OrderDetail, OrderItem
-from app.schemas.schema import ToolNotFoundResponse
+from app.schemas.agent import ToolNotFoundResponse
 
 
 @tool
 @traceable(name="tool_get_order_details")
-def get_order_details(
+async def get_order_details(
     customer_id: Annotated[str, InjectedToolArg], order_id: str
 ) -> dict:
     """
@@ -34,9 +34,9 @@ def get_order_details(
     Returns:
         Order detail with items, pricing, payment, shipping, and return info.
     """
-    supabase = get_supabase_client()
+    supabase = await get_supabase_client()
 
-    result = (
+    result = await (
         supabase.table("orders")
         .select("*")
         .eq("id", order_id)

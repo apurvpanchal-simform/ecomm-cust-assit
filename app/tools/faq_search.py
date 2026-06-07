@@ -1,17 +1,17 @@
 from langchain_core.tools import tool
 from app.services.search import VectorStore
-from app.schemas.schema import ToolNotFoundResponse
+from app.schemas.agent import ToolNotFoundResponse
 from langsmith import traceable
 
 
 @tool
 @traceable(name="tool_search_faq")
-def search_faq(query: str) -> str:
+async def search_faq(query: str) -> str:
     """Search the company knowledge base for policies, shipping, returns, and general info.
     Use this tool whenever the user asks a general question about the company.
     """
     store = VectorStore()
-    chunks = store.vector_search(query=query, top_k=3)
+    chunks = await store.vector_search(query=query, top_k=3)
 
     if not chunks:
         response = ToolNotFoundResponse(

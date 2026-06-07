@@ -1,6 +1,6 @@
 import os
 import logging
-import redis
+import redis.asyncio as redis
 
 from contextlib import asynccontextmanager
 from dotenv import load_dotenv
@@ -8,38 +8,29 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, Request, HTTPException, Depends
 from langchain_core.messages import HumanMessage
 
-from psycopg_pool import ConnectionPool
+from psycopg_pool import AsyncConnectionPool
 from psycopg.rows import dict_row
 
-from langgraph.checkpoint.redis import RedisSaver
-from langgraph.checkpoint.postgres import PostgresSaver
+from langgraph.checkpoint.redis.aio import AsyncRedisSaver
+from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 
 from app.graph.builder import compile_graph
-from app.graph.checkpointer import DualCheckpointer
+from app.graph.checkpointer import AsyncDualCheckpointer
 
-from app.schemas.auth import (
+from app.schemas.api import (
     LoginRequest,
     LoginResponse,
-)
-
-from app.schemas.input import (
     ChatRequest,
+    ConversationItem,
 )
 
-from pydantic import BaseModel
 from typing import List
-from datetime import datetime
-
-class ConversationItem(BaseModel):
-    conversation_id: str
-    title: str
-    updated_at: datetime
-
-from app.services.auth_service import (
+from app.services.auth import (
     generate_jwt,
 )
+from app.services.token_tracker import TokenCostCallbackHandler
 
-from app.services.customer_service import (
+from app.services.customers import (
     CustomerService,
 )
 
@@ -50,6 +41,7 @@ from app.middleware.auth import (
 load_dotenv()
 
 logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO)
 
 
 @asynccontextmanager
@@ -70,8 +62,8 @@ async def lifespan(app: FastAPI):
 
     try:
 
-        with (
-            ConnectionPool(
+        async with (
+            AsyncConnectionPool(
                 supabase_db_url,
                 kwargs={
                     "autocommit": True,
@@ -82,30 +74,21 @@ async def lifespan(app: FastAPI):
             redis.Redis.from_url(redis_url) as redis_client,
         ):
 
-            print("Initializing PostgresSaver...")
-            postgres_saver = PostgresSaver(pool)
-            postgres_saver.setup()
+            logger.info("Initializing AsyncPostgresSaver...")
+            postgres_saver = AsyncPostgresSaver(pool)
+            await postgres_saver.setup()
 
-            print("Ensuring customer_conversations table exists...")
-            with pool.connection() as conn:
-                conn.execute("""
-                    CREATE TABLE IF NOT EXISTS customer_conversations (
-                        conversation_id TEXT PRIMARY KEY,
-                        customer_id TEXT NOT NULL,
-                        title TEXT,
-                        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-                    )
-                """)
+            # The customer_conversations table is managed in app/db/schema.sql
             
             app.state.pool = pool
 
-            print("Initializing RedisSaver...")
-            redis_saver = RedisSaver(
+            logger.info("Initializing AsyncRedisSaver...")
+            redis_saver = AsyncRedisSaver(
                 redis_client=redis_client
             )
-            redis_saver.setup()
+            await redis_saver.asetup()
 
-            dual_checkpointer = DualCheckpointer(
+            dual_checkpointer = AsyncDualCheckpointer(
                 redis_saver=redis_saver,
                 postgres_saver=postgres_saver,
             )
@@ -114,9 +97,7 @@ async def lifespan(app: FastAPI):
                 checkpointer=dual_checkpointer
             )
 
-            print(
-                "Graph compiled successfully with Redis + Postgres checkpointing."
-            )
+            logger.info("Graph compiled successfully with Redis + Postgres async checkpointing.")
 
             yield
 
@@ -128,6 +109,10 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(lifespan=lifespan)
+
+@app.get("/health")
+async def health_check():
+    return {"status": "ok"}
 
 
 @app.post(
@@ -174,14 +159,14 @@ async def chat(
         or customer_id
     )
 
-    with request.app.state.pool.connection() as conn:
-        conn.execute("""
+    async with request.app.state.pool.connection() as conn:
+        await conn.execute("""
             INSERT INTO customer_conversations (conversation_id, customer_id, title)
             VALUES (%s, %s, %s)
             ON CONFLICT (conversation_id) DO UPDATE SET updated_at = NOW()
         """, (thread_id, customer_id, chat_request.query[:30] + "..."))
 
-    print(
+    logger.info(
         f"Invoking graph | "
         f"customer_id={customer_id} | "
         f"thread_id={thread_id}"
@@ -190,18 +175,20 @@ async def chat(
     config = {
         "configurable": {
             "thread_id": thread_id
-        }
+        },
+        "callbacks": [TokenCostCallbackHandler()]
     }
 
     state_input = {
         "query": chat_request.query,
         "customer_id": customer_id,
         "messages": [HumanMessage(content=chat_request.query)],
+        "image_base64": chat_request.image_base64 or None,
+        "pending_agents": [],
+        "executed_agents": [],
     }
-    if chat_request.image_base64:
-        state_input["image_base64"] = chat_request.image_base64
 
-    result = request.app.state.graph.invoke(
+    result = await request.app.state.graph.ainvoke(
         state_input,
         config=config,
     )
@@ -214,13 +201,14 @@ async def list_conversations(
     request: Request,
     customer_id: str = Depends(get_current_customer),
 ):
-    with request.app.state.pool.connection() as conn:
-        result = conn.execute("""
+    async with request.app.state.pool.connection() as conn:
+        cursor = await conn.execute("""
             SELECT conversation_id, title, updated_at 
             FROM customer_conversations 
             WHERE customer_id = %s 
             ORDER BY updated_at DESC
-        """, (customer_id,)).fetchall()
+        """, (customer_id,))
+        result = await cursor.fetchall()
         
         return [ConversationItem(**row) for row in result]
 
@@ -231,16 +219,17 @@ async def get_chat_history(
     request: Request,
     customer_id: str = Depends(get_current_customer),
 ):
-    with request.app.state.pool.connection() as conn:
-        row = conn.execute(
+    async with request.app.state.pool.connection() as conn:
+        cursor = await conn.execute(
             "SELECT 1 FROM customer_conversations WHERE conversation_id = %s AND customer_id = %s",
             (conversation_id, customer_id)
-        ).fetchone()
+        )
+        row = await cursor.fetchone()
         if not row:
             raise HTTPException(status_code=403, detail="Conversation not found")
 
     config = {"configurable": {"thread_id": conversation_id}}
-    state = request.app.state.graph.get_state(config)
+    state = await request.app.state.graph.aget_state(config)
     
     messages = state.values.get("messages", [])
     

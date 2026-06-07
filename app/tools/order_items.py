@@ -8,12 +8,12 @@ from langchain_core.tools import tool, InjectedToolArg
 
 from app.db.supabase import get_supabase_client
 from app.schemas.order import OrderItem, OrderItemMatch, OrderItemSearchResponse
-from app.schemas.schema import ToolNotFoundResponse
+from app.schemas.agent import ToolNotFoundResponse
 
 
 @tool
 @traceable(name="tool_search_order_items")
-def search_order_items(
+async def search_order_items(
     customer_id: Annotated[str, InjectedToolArg], keyword: str
 ) -> dict:
     """
@@ -33,9 +33,9 @@ def search_order_items(
     Returns:
         Matching items across all orders.
     """
-    supabase = get_supabase_client()
+    supabase = await get_supabase_client()
 
-    result = (
+    result = await (
         supabase.table("orders")
         .select("id, items, status, ordered_at, total")
         .eq("customer_id", customer_id)

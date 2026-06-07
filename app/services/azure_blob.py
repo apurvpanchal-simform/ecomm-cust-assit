@@ -5,8 +5,6 @@ from azure.storage.blob import BlobServiceClient
 def get_blob_client_service():
     connection_string = os.environ.get("AZURE_STORAGE_CONNECTION_STRING")
     if not connection_string or connection_string.startswith("DefaultEndpointsProtocol=https;AccountName=..."):
-        # Allow it to bypass if just loading locally without env set, or raise Error if preferred
-        # For a robust agent, better to return None or raise
         pass
     
     # In case it's not set, we'll try to create it anyway so it fails natively
@@ -22,12 +20,13 @@ def _ensure_container_exists(client: BlobServiceClient, container: str):
             # First try to create it with public access so images are viewable
             container_client.create_container(public_access="blob")
         except Exception as e:
-            print(f"Could not create public container, falling back to private: {e}")
+            import logging
+            logging.getLogger(__name__).warning(f"Could not create public container, falling back to private: {e}")
             try:
                 # Fallback to private container
                 container_client.create_container()
             except Exception as e2:
-                print(f"Failed to create private container: {e2}")
+                logging.getLogger(__name__).warning(f"Failed to create private container: {e2}")
 
 def upload_product_image(image_bytes: bytes, product_id: str, ext: str = "jpg") -> str:
     """Upload product image, return public CDN URL."""

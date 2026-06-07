@@ -1,3 +1,4 @@
+import os
 import open_clip
 import torch
 from PIL import Image
@@ -6,11 +7,14 @@ from functools import lru_cache
 
 @lru_cache(maxsize=1)
 def load_model():
+    clip_model = os.getenv("CLIP_MODEL", "ViT-B-32")
+    clip_pretrained = os.getenv("CLIP_PRETRAINED", "openai")
+    
     model, _, preprocess = open_clip.create_model_and_transforms(
-        "ViT-B-32", pretrained="openai"
+        clip_model, pretrained=clip_pretrained
     )
     model.eval()
-    tokenizer = open_clip.get_tokenizer("ViT-B-32")
+    tokenizer = open_clip.get_tokenizer(clip_model)
     return model, preprocess, tokenizer
 
 def embed_image_bytes(image_bytes: bytes) -> list[float]:

@@ -3,8 +3,7 @@ from app.agents.faq import faq_node
 from app.agents.order import order_node
 from app.agents.supervisor import supervisor_node, out_of_domain_node
 from app.agents.summarizer import summarizer_node
-from app.agents.content_moderation import content_moderation_node
-from app.agents.clip_embedder_node import clip_embedding_node
+from app.agents.clip_embedding import clip_embedding_node
 from app.agents.visual_search import visual_search_node
 from app.agents.result_formatter import result_formatter_node
 from app.graph.state import AgentState
@@ -17,20 +16,12 @@ def route_supervisor(state: AgentState) -> str:
         return "summarizer"
     return next_node
 
-def route_content_moderation(state: AgentState) -> str:
-    """If image is unsafe, skip to summarizer."""
-    if state.get("image_is_safe") is False:
-        return "summarizer"
-    return "clip_embedder"
-
-
 builder = StateGraph(AgentState)
 
 builder.add_node("supervisor", supervisor_node)
 builder.add_node("faq", faq_node)
 builder.add_node("order", order_node)
 builder.add_node("out_of_domain", out_of_domain_node)
-builder.add_node("content_moderation", content_moderation_node)
 builder.add_node("clip_embedder", clip_embedding_node)
 builder.add_node("visual_search", visual_search_node)
 builder.add_node("result_formatter", result_formatter_node)
@@ -44,29 +35,70 @@ builder.add_conditional_edges(
     {
         "faq": "faq",
         "order": "order",
-        "visual_search_agent": "content_moderation",
+        "visual_search_agent": "clip_embedder",
         "out_of_domain": "out_of_domain",
         "summarizer": "summarizer",
     },
 )
 
-builder.add_edge("faq", "supervisor")
-builder.add_edge("order", "supervisor")
+def route_after_agent(state: AgentState) -> str:
+    """Routes to the next unexecuted agent in pending_agents, or to summarizer if done."""
+    pending = state.get("pending_agents", []) or []
+    executed = state.get("executed_agents", []) or []
+    
+    for agent in pending:
+        if agent not in executed:
+            if agent == "visual_search_agent":
+                return "clip_embedder"
+            return agent
+            
+    return "summarizer"
 
-# Visual Search Pipeline
+
+# Register agent transitions using route_after_agent
 builder.add_conditional_edges(
-    "content_moderation",
-    route_content_moderation,
+    "faq",
+    route_after_agent,
     {
-        "summarizer": "summarizer",
+        "faq": "faq",
+        "order": "order",
         "clip_embedder": "clip_embedder",
+        "out_of_domain": "out_of_domain",
+        "summarizer": "summarizer",
     }
 )
+
+builder.add_conditional_edges(
+    "order",
+    route_after_agent,
+    {
+        "faq": "faq",
+        "order": "order",
+        "clip_embedder": "clip_embedder",
+        "out_of_domain": "out_of_domain",
+        "summarizer": "summarizer",
+    }
+)
+
+builder.add_conditional_edges(
+    "out_of_domain",
+    route_after_agent,
+    {
+        "faq": "faq",
+        "order": "order",
+        "clip_embedder": "clip_embedder",
+        "out_of_domain": "out_of_domain",
+        "summarizer": "summarizer",
+    }
+)
+
+
+# Visual Search Pipeline
+
 builder.add_edge("clip_embedder", "visual_search")
 builder.add_edge("visual_search", "result_formatter")
-builder.add_edge("result_formatter", "summarizer")
+builder.add_edge("result_formatter", END)
 
-builder.add_edge("out_of_domain", "summarizer")
 builder.add_edge("summarizer", END)
 
 

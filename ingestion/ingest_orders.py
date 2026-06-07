@@ -20,6 +20,11 @@ def seed_orders():
 
     for i in range(0, len(orders), batch_size):
         batch = orders[i : i + batch_size]
+        
+        # Remove fields that exist in the legacy JSON but not in our Postgres schema
+        for order in batch:
+            order.pop("partition_key", None)
+            order.pop("tracking_number", None)
 
         response = supabase.table("orders").upsert(batch, on_conflict="id").execute()
 

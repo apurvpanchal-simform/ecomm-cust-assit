@@ -1,33 +1,20 @@
 import os
 from dotenv import load_dotenv
-from qdrant_client import QdrantClient
-from qdrant_client.models import Distance, VectorParams
-from langchain_google_genai import GoogleGenerativeAIEmbeddings
+from app.db.qdrant import get_qdrant_client, ensure_faq_collection
+from app.services.llm import get_embeddings
 
 load_dotenv()
 
 class VectorStore:
     def __init__(self):
-        self.url = os.getenv("QDRANT_URL", "http://localhost:6333")
         self.collection_name = "ecommerce-knowledge"
-        self.client = QdrantClient(url=self.url)
-        self.embeddings = GoogleGenerativeAIEmbeddings(
-            model=os.getenv("EMBEDDING_MODEL")
-        )
+        self.client = get_qdrant_client()
+        self.embeddings = get_embeddings()
 
-    def _ensure_collection(self):
-        try:
-            self.client.get_collection(self.collection_name)
-        except Exception:
-            self.client.create_collection(
-                collection_name=self.collection_name,
-                vectors_config=VectorParams(size=3072, distance=Distance.COSINE),
-            )
+    async def initialize(self):
+        await ensure_faq_collection()
 
-    def initialize(self):
-        self._ensure_collection()
-
-    def vector_search(self, query: str, top_k: int = 3) -> list[dict]:
+    async def vector_search(self, query: str, top_k: int = 3) -> list[dict]:
         """Search the vector store and return results with scores.
 
         Args:
@@ -37,9 +24,9 @@ class VectorStore:
         Returns:
             A list of dicts, each containing 'content', 'source_file', and 'score'.
         """
-        query_vector = self.embeddings.embed_query(query)
+        query_vector = await self.embeddings.aembed_query(query)
 
-        results = self.client.query_points(
+        results = await self.client.query_points(
             collection_name=self.collection_name,
             query=query_vector,
             limit=top_k,

@@ -1,4 +1,4 @@
-from typing import Optional, Any, Iterator, Dict, Sequence, Tuple
+from typing import Optional, Any, AsyncIterator, Dict, Sequence, Tuple
 from langchain_core.runnables import RunnableConfig
 from langgraph.checkpoint.base import (
     BaseCheckpointSaver, 
@@ -8,9 +8,13 @@ from langgraph.checkpoint.base import (
     ChannelVersions
 )
 
-class DualCheckpointer(BaseCheckpointSaver):
+import logging
+
+logger = logging.getLogger(__name__)
+
+class AsyncDualCheckpointer(BaseCheckpointSaver):
     """
-    A custom LangGraph checkpointer that writes to both Redis and Postgres (Supabase).
+    An async LangGraph checkpointer that writes to both Redis and Postgres (Supabase).
     Reads prioritize Redis for speed, falling back to Postgres if a cache miss occurs.
     """
     def __init__(self, redis_saver: BaseCheckpointSaver, postgres_saver: BaseCheckpointSaver):
@@ -18,7 +22,7 @@ class DualCheckpointer(BaseCheckpointSaver):
         self.redis_saver = redis_saver
         self.postgres_saver = postgres_saver
 
-    def get_tuple(
+    async def aget_tuple(
         self,
         config: RunnableConfig,
     ) -> Optional[CheckpointTuple]:
@@ -28,50 +32,38 @@ class DualCheckpointer(BaseCheckpointSaver):
             .get("thread_id")
         )
 
-        print(f"\nTHREAD_ID={thread_id}")
+        logger.debug(f"THREAD_ID={thread_id}")
 
-        tuple_ = self.redis_saver.get_tuple(config)
+        tuple_ = await self.redis_saver.aget_tuple(config)
 
         if tuple_ is not None:
-            print("⚡ REDIS HIT")
+            logger.debug("⚡ REDIS HIT")
             return tuple_
 
-        print("❌ REDIS MISS")
+        logger.debug("❌ REDIS MISS")
 
-        tuple_ = self.postgres_saver.get_tuple(config)
+        tuple_ = await self.postgres_saver.aget_tuple(config)
 
         if tuple_ is not None:
-            print("🐘 POSTGRES HIT")
+            logger.debug("🐘 POSTGRES HIT")
         else:
-            print("❌ POSTGRES MISS")
+            logger.debug("❌ POSTGRES MISS")
 
         return tuple_
 
-
-    # def get_tuple(self, config: RunnableConfig) -> Optional[CheckpointTuple]:
-    #     # 1. Try fetching from Redis first. 
-    #     # This is where the magic happens for speed: reading from RAM is microseconds fast.
-    #     tuple_ = self.redis_saver.get_tuple(config)
-    #     if tuple_ is not None:
-    #         return tuple_
-            
-    #     # 2. Fall back to Postgres if not found in Redis (e.g., if Redis data expired or was evicted).
-    #     # This involves a disk read, which is slower, but guarantees we don't lose old chats.
-    #     return self.postgres_saver.get_tuple(config)
-
-    def list(
+    async def alist(
         self,
         config: Optional[RunnableConfig],
         *,
         filter: Optional[Dict[str, Any]] = None,
         before: Optional[RunnableConfig] = None,
         limit: Optional[int] = None,
-    ) -> Iterator[CheckpointTuple]:
+    ) -> AsyncIterator[CheckpointTuple]:
         # Read history from Postgres since it's our durable long-term storage
-        # Redis might not contain the full history of every single conversation.
-        return self.postgres_saver.list(config, filter=filter, before=before, limit=limit)
+        async for item in self.postgres_saver.alist(config, filter=filter, before=before, limit=limit):
+            yield item
 
-    def put(
+    async def aput(
         self,
         config: RunnableConfig,
         checkpoint: Checkpoint,
@@ -79,19 +71,37 @@ class DualCheckpointer(BaseCheckpointSaver):
         new_versions: ChannelVersions,
     ) -> RunnableConfig:
         # Write the checkpoint to Supabase for long-term persistence.
-        self.postgres_saver.put(config, checkpoint, metadata, new_versions)
-        # Write the checkpoint to Redis and return the resulting config.
-        return self.redis_saver.put(config, checkpoint, metadata, new_versions)
+        await self.postgres_saver.aput(config, checkpoint, metadata, new_versions)
+        # Write the latest checkpoint to Redis (hot cache).
+        res = await self.redis_saver.aput(config, checkpoint, metadata, new_versions)
+        
+        # Prune old checkpoints from Redis — keep only the latest one.
+        try:
+            thread_id = config.get("configurable", {}).get("thread_id")
+            if thread_id and hasattr(self.redis_saver, "_redis"):
+                redis_client = self.redis_saver._redis
+                latest_id = checkpoint["id"]
+                
+                async for key in redis_client.scan_iter(match=f"*{thread_id}*"):
+                    key_str = key.decode()
+                    # Keep checkpoint_latest pointer and keys belonging to the current checkpoint
+                    if "checkpoint_latest" in key_str or latest_id in key_str:
+                        await redis_client.expire(key, 3600)  # 1-hour TTL
+                        continue
+                    await redis_client.delete(key)
+        except Exception as e:
+            logger.error(f"Failed to prune Redis keys for thread {thread_id}: {e}")
+            
+        return res
 
-    def put_writes(
+    async def aput_writes(
         self,
         config: RunnableConfig,
         writes: Sequence[Tuple[str, Any]],
         task_id: str,
     ) -> None:
-        # Write intermediate states/writes to both storage backends.
-        self.postgres_saver.put_writes(config, writes, task_id)
-        self.redis_saver.put_writes(config, writes, task_id)
+        # Only write intermediate states to Postgres.
+        await self.postgres_saver.aput_writes(config, writes, task_id)
 
     def get_next_version(self, current: Optional[str], channel: Any) -> str:
         # Delegate version generation to one of the underlying savers

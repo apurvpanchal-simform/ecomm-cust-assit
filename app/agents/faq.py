@@ -8,7 +8,7 @@ from langchain_core.runnables import RunnableConfig
 from langchain_groq import ChatGroq
 from app.tools.faq_search import search_faq
 from app.graph.state import AgentState
-from app.schemas.response import AgentResponse, TicketCategory
+from app.schemas.agent import AgentResponse, TicketCategory
 
 load_dotenv()
 
@@ -26,6 +26,7 @@ Rules:
 5. Be professional, concise, and helpful.
 6. Summarize the tool results in natural, friendly language.
 7. If the exact answer or data you need is already present in the 'Summary of earlier conversation', you may use it directly without making a duplicate tool call.
+8. CRITICAL: If the `search_faq` tool returns an "Error:" or fails, DO NOT call the tool again. Immediately apologize to the user and explain that the search service is temporarily unavailable.
 """
 
 
@@ -96,47 +97,82 @@ def generate_faq_response(
         "agent": "faq",
     },
 )
-def faq_node(state: AgentState, config: RunnableConfig) -> dict:
+async def faq_node(state: AgentState, config: RunnableConfig) -> dict:
 
-    # Only keep the last 4 messages for context to prevent bloated
+    query = state.get("query", "")
+    # Only keep the last 12 messages for context to prevent bloated
     # conversations on resumed threads (full history stays in checkpointer).
     # The query is already in messages as a HumanMessage (added by the /chat endpoint).
     all_messages = list(state.get("messages", []))
-    recent_messages = all_messages[-4:] if len(all_messages) > 4 else all_messages
+    recent_messages = all_messages[-12:] if len(all_messages) > 12 else all_messages
     
+    # Pre-fetch context using the search tool directly in Python
+    try:
+        context = str(await search_faq.ainvoke({"query": query})).strip()
+    except Exception as e:
+        context = f"Error performing search: {e}"
+
+    context_message = SystemMessage(
+        content=(
+            f"Here is the context retrieved from the FAQ knowledge base for the user's query:\n"
+            f"[[CONTEXT START]]\n"
+            f"{context}\n"
+            f"[[CONTEXT END]]\n\n"
+            f"Answer the user's query using ONLY the provided context. Follow all guidelines.\n"
+            f"IMPORTANT: If previous messages in the conversation history have already answered parts of the user's query (such as order details), do NOT repeat or comment on those parts. Focus strictly on answering the general FAQ question."
+        )
+    )
+
     conversation = [SystemMessage(content=SYSTEM_PROMPT)]
     
     chat_summary = state.get("chat_summary", "")
     if chat_summary:
         conversation.append(SystemMessage(content=f"Summary of earlier conversation:\n{chat_summary}"))
         
+    conversation.append(context_message)
     conversation += recent_messages
 
-    model_name = os.getenv("PRIMARY_MODEL")
-    if not model_name:
-        raise RuntimeError("PRIMARY_MODEL environment variable is not set.")
-
-    llm = ChatGroq(model=model_name)
-    agent = llm.bind_tools(_FAQ_TOOLS)
+    from app.services.llm import get_llm
+    llm = get_llm(temperature=0.4)
 
     try:
-        resolution_text, new_messages, error = generate_faq_response(
-            agent,
-            conversation,
-            config,
-        )
-        requires_human = error is not None
-        confidence = 0.0 if error else 1.0
+        response = await llm.ainvoke(conversation, config=config)
+        resolution_text = str(response.content).strip()
+        
+        last_msg = all_messages[-1] if all_messages else None
+        if last_msg and hasattr(last_msg, 'type') and last_msg.type == "ai":
+            merged_content = f"{last_msg.content}\n\n{resolution_text}"
+            new_messages = [AIMessage(content=merged_content, id=last_msg.id)]
+            final_resolution_text = merged_content
+        else:
+            new_messages = [AIMessage(content=resolution_text)]
+            final_resolution_text = resolution_text
+            
+        error = None
+        requires_human = False
+        confidence = 1.0
+
+        if "ToolNotFoundResponse" in context or "No relevant FAQ articles" in context or "don't have a confident answer" in context:
+            requires_human = True
+            confidence = 0.0
 
     except Exception as exc:
         resolution_text = "Something went wrong while processing your request."
-        new_messages = [AIMessage(content=resolution_text)]
+        last_msg = all_messages[-1] if all_messages else None
+        if last_msg and hasattr(last_msg, 'type') and last_msg.type == "ai":
+            merged_content = f"{last_msg.content}\n\n{resolution_text}"
+            new_messages = [AIMessage(content=merged_content, id=last_msg.id)]
+            final_resolution_text = merged_content
+        else:
+            new_messages = [AIMessage(content=resolution_text)]
+            final_resolution_text = resolution_text
+            
         error = str(exc)
         requires_human = True
         confidence = 0.0
 
     agent_response = AgentResponse(
-        resolution_text=resolution_text,
+        resolution_text=final_resolution_text,
         confidence_score=confidence,
         ticket_category=TicketCategory.FAQ,
         requires_human=requires_human,
@@ -148,4 +184,5 @@ def faq_node(state: AgentState, config: RunnableConfig) -> dict:
         "agent_response": agent_response.model_dump(mode="json"),
         "structured_output": agent_response.model_dump(mode="json"),
         "error": error,
+        "executed_agents": state.get("executed_agents", []) + ["faq"],
     }
