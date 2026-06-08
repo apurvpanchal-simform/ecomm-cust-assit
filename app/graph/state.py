@@ -28,3 +28,5 @@ class AgentState(TypedDict, total=False):
     image_is_safe: bool | None
     visual_results: list[dict[str, Any]] | None
     active_filters: dict[str, Any] | None
+    image_description: str | None
+    search_query: str | None
