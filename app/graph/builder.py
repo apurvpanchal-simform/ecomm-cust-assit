@@ -92,15 +92,12 @@ builder.add_conditional_edges(
     }
 )
 
-
 # Visual Search Pipeline
-
 builder.add_edge("clip_embedder", "visual_search")
 builder.add_edge("visual_search", "result_formatter")
 builder.add_edge("result_formatter", END)
 
 builder.add_edge("summarizer", END)
-
 
 def compile_graph(checkpointer=None):
     """Compiles and returns the graph, optionally attaching a checkpointer."""

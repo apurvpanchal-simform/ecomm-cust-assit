@@ -4,9 +4,9 @@ from typing import Literal
 from dotenv import load_dotenv
 from pydantic import BaseModel, Field
 from langsmith import traceable
-from langchain_groq import ChatGroq
-from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
+from langchain_core.messages import SystemMessage, AIMessage
 from langchain_core.runnables import RunnableConfig
+from app.services.llm import get_llm
 
 from app.graph.state import AgentState
 
@@ -43,7 +43,6 @@ class Route(BaseModel):
 async def supervisor_node(state: AgentState, config: RunnableConfig) -> dict:
     """Delegates to the correct agent or finishes the conversation."""
 
-    query = state.get("query", "")
     messages = state.get("messages", [])
 
     # Short-circuit: if an image is present, route to visual search pipeline
@@ -54,7 +53,6 @@ async def supervisor_node(state: AgentState, config: RunnableConfig) -> dict:
             "next": "visual_search_agent"
         }
 
-    from app.services.llm import get_llm
     llm = get_llm(temperature=0.0)
     structured_llm = llm.with_structured_output(Route)
 
@@ -64,9 +62,9 @@ async def supervisor_node(state: AgentState, config: RunnableConfig) -> dict:
     if chat_summary:
         supervisor_messages.append(SystemMessage(content=f"Summary of earlier conversation:\n{chat_summary}"))
 
-    # Only send the last 12 messages to the supervisor for routing decisions.
+    # Only send the last 8 messages to the supervisor for routing decisions.
     # The query is already in messages as a HumanMessage (added by the /chat endpoint).
-    recent_messages = messages[-12:] if len(messages) > 12 else messages
+    recent_messages = messages[-8:] if len(messages) > 8 else messages
     for msg in recent_messages:
         supervisor_messages.append(msg)
 
@@ -124,10 +122,6 @@ async def out_of_domain_node(state: AgentState, config: RunnableConfig) -> dict:
         "messages": [AIMessage(content=OUT_OF_DOMAIN_MESSAGE)],
         "agent_response": {
             "resolution_text": OUT_OF_DOMAIN_MESSAGE,
-            "confidence_score": 1.0,
-            "ticket_category": "out_of_domain",
-            "requires_human": False,
-            "escalation_reason": None,
         },
         "executed_agents": state.get("executed_agents", []) + ["out_of_domain"],
     }

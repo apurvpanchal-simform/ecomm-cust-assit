@@ -1,24 +1,5 @@
-from typing import Optional, Literal, Any
 from pydantic import BaseModel
 from datetime import datetime
-
-# ── Reference helpers (existing) ──────────────────────────────────────
-
-
-class OrderReference(BaseModel):
-    reference_type: Literal[
-        "explicit_order_id", "latest_order", "previous_order", "conversation_reference"
-    ]
-
-    order_id: Optional[str] = None
-
-
-class OrderContextResult(BaseModel):
-    success: bool
-    order_id: Optional[str] = None
-    order: Optional[dict] = None
-    error: Optional[str] = None
-
 
 # ── Summary (used by get_customer_orders / filter) ────────────────────
 

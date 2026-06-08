@@ -3,15 +3,14 @@ from typing import Any
 
 from dotenv import load_dotenv
 from langsmith import traceable
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
+from langchain_core.messages import AIMessage, SystemMessage, ToolMessage
 from langchain_core.runnables import RunnableConfig
-from langchain_groq import ChatGroq
-
 from app.graph.state import AgentState
-from app.schemas.agent import AgentResponse, TicketCategory
+from app.schemas.agent import AgentResponse
 from app.tools.order_lookup import get_customer_orders
 from app.tools.order_details import get_order_details
 from app.tools.order_items import search_order_items
+from app.services.llm import get_llm
 
 load_dotenv()
 
@@ -152,26 +151,20 @@ async def order_node(state: AgentState, config: RunnableConfig) -> dict:
             
         agent_response = AgentResponse(
             resolution_text=final_msg,
-            confidence_score=1.0,
-            ticket_category=TicketCategory.ORDER,
-            requires_human=False,
-            escalation_reason="missing_customer_id",
         )
         return {
             **state,
             "messages": new_msgs,
             "agent_response": agent_response.model_dump(mode="json"),
-            "structured_output": agent_response.model_dump(mode="json"),
             "error": "missing_customer_id",
             "executed_agents": state.get("executed_agents", []) + ["order"],
         }
 
-    query = state.get("query", "")
-    # Only keep the last 12 messages for context to prevent bloated
+    # Only keep the last 8 messages for context to prevent bloated
     # conversations on resumed threads (full history stays in checkpointer).
     # The query is already in messages as a HumanMessage (added by the /chat endpoint).
     all_messages = list(state.get("messages", []))
-    recent_messages = all_messages[-12:] if len(all_messages) > 12 else all_messages
+    recent_messages = all_messages[-8:] if len(all_messages) > 8 else all_messages
     
     conversation = [SystemMessage(content=SYSTEM_PROMPT)]
     
@@ -181,7 +174,6 @@ async def order_node(state: AgentState, config: RunnableConfig) -> dict:
         
     conversation += recent_messages
 
-    from app.services.llm import get_llm
     llm = get_llm(temperature=0.1)
     agent = llm.bind_tools(_ORDER_TOOLS)
 
@@ -203,9 +195,6 @@ async def order_node(state: AgentState, config: RunnableConfig) -> dict:
             final_resolution_text = merged_content
         else:
             final_resolution_text = resolution_text
-            
-        requires_human = error is not None
-        confidence = 0.0 if error else 1.0
 
     except Exception as exc:
         resolution_text = "Something went wrong while processing your order request."
@@ -219,21 +208,14 @@ async def order_node(state: AgentState, config: RunnableConfig) -> dict:
             final_resolution_text = resolution_text
             
         error = str(exc)
-        requires_human = True
-        confidence = 0.0
 
     agent_response = AgentResponse(
         resolution_text=final_resolution_text,
-        confidence_score=confidence,
-        ticket_category=TicketCategory.ORDER,
-        requires_human=requires_human,
-        escalation_reason=error,
     )
 
     return {
         "messages": new_messages,
         "agent_response": agent_response.model_dump(mode="json"),
-        "structured_output": agent_response.model_dump(mode="json"),
         "error": error,
         "executed_agents": state.get("executed_agents", []) + ["order"],
     }

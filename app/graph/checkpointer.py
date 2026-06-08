@@ -46,6 +46,25 @@ class AsyncDualCheckpointer(BaseCheckpointSaver):
 
         if tuple_ is not None:
             logger.debug("🐘 POSTGRES HIT")
+            try:
+                # WARM REDIS CACHE: Write the tuple back to Redis so subsequent reads hit the cache
+                await self.redis_saver.aput(
+                    tuple_.config,
+                    tuple_.checkpoint,
+                    tuple_.metadata,
+                    {}
+                )
+                
+                # Set TTL on the restored keys
+                thread_id = tuple_.config.get("configurable", {}).get("thread_id")
+                if thread_id and hasattr(self.redis_saver, "_redis"):
+                    redis_client = self.redis_saver._redis
+                    latest_id = tuple_.checkpoint["id"]
+                    
+                    await redis_client.expire(f"checkpoint:{thread_id}:{latest_id}", 3600)
+                    await redis_client.expire(f"checkpoint_metadata:{thread_id}:{latest_id}", 3600)
+            except Exception as e:
+                logger.error(f"Failed to warm Redis cache: {e}")
         else:
             logger.debug("❌ POSTGRES MISS")
 
@@ -76,21 +95,19 @@ class AsyncDualCheckpointer(BaseCheckpointSaver):
         res = await self.redis_saver.aput(config, checkpoint, metadata, new_versions)
         
         # Prune old checkpoints from Redis — keep only the latest one.
+        # FIX: We remove the dangerous O(N) scan_iter loop. Redis will naturally evict 
+        # old checkpoints because we now set a 1-hour TTL on every write.
         try:
             thread_id = config.get("configurable", {}).get("thread_id")
             if thread_id and hasattr(self.redis_saver, "_redis"):
                 redis_client = self.redis_saver._redis
                 latest_id = checkpoint["id"]
                 
-                async for key in redis_client.scan_iter(match=f"*{thread_id}*"):
-                    key_str = key.decode()
-                    # Keep checkpoint_latest pointer and keys belonging to the current checkpoint
-                    if "checkpoint_latest" in key_str or latest_id in key_str:
-                        await redis_client.expire(key, 3600)  # 1-hour TTL
-                        continue
-                    await redis_client.delete(key)
+                # Fast O(1) TTL setting (1 hour = 3600 seconds)
+                await redis_client.expire(f"checkpoint:{thread_id}:{latest_id}", 3600)
+                await redis_client.expire(f"checkpoint_metadata:{thread_id}:{latest_id}", 3600)
         except Exception as e:
-            logger.error(f"Failed to prune Redis keys for thread {thread_id}: {e}")
+            logger.error(f"Failed to set Redis TTL for thread {thread_id}: {e}")
             
         return res
 

@@ -1,7 +1,5 @@
-import os
-from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
+from langchain_core.messages import SystemMessage, HumanMessage
 from langchain_core.runnables import RunnableConfig
-from langchain_groq import ChatGroq
 from app.graph.state import AgentState
 
 SUMMARIZER_PROMPT = """You are a helpful assistant responsible for summarizing an ongoing conversation.
@@ -34,7 +32,7 @@ async def summarizer_node(state: AgentState, config: RunnableConfig) -> dict:
     summarized_count = state.get("summarized_message_count", 0)
     current_summary = state.get("chat_summary", "")
     
-    WINDOW_SIZE = 12
+    WINDOW_SIZE = 8
     CHUNK_SIZE = 6
     
     # We want to keep the last WINDOW_SIZE messages completely unsummarized.

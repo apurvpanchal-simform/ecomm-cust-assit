@@ -11,13 +11,9 @@ class AgentState(TypedDict, total=False):
     messages: Annotated[list, add_messages]
     customer_id: str
     session_id: str
-    intent: str
-    confidence: float
     query: str
     agent_response: dict[str, Any]
-    structured_output: dict[str, Any]
     error: str | None
-    final_response: dict[str, Any]
     next: str
     chat_summary: str
     summarized_message_count: int
