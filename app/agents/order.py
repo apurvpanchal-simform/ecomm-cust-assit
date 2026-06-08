@@ -160,11 +160,11 @@ async def order_node(state: AgentState, config: RunnableConfig) -> dict:
             "executed_agents": state.get("executed_agents", []) + ["order"],
         }
 
-    # Only keep the last 8 messages for context to prevent bloated
-    # conversations on resumed threads (full history stays in checkpointer).
+    # Send all unsummarized messages to ensure no context gap
     # The query is already in messages as a HumanMessage (added by the /chat endpoint).
     all_messages = list(state.get("messages", []))
-    recent_messages = all_messages[-8:] if len(all_messages) > 8 else all_messages
+    summarized_count = state.get("summarized_message_count", 0)
+    recent_messages = all_messages[summarized_count:]
     
     conversation = [SystemMessage(content=SYSTEM_PROMPT)]
     

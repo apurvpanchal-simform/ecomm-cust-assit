@@ -6,6 +6,8 @@ from app.agents.summarizer import summarizer_node
 from app.agents.clip_embedding import clip_embedding_node
 from app.agents.visual_search import visual_search_node
 from app.agents.result_formatter import result_formatter_node
+from app.agents.image_analyzer import image_analyzer_node
+from app.agents.filter_extractor import filter_extractor_node
 from app.graph.state import AgentState
 
 
@@ -18,16 +20,19 @@ def route_supervisor(state: AgentState) -> str:
 
 builder = StateGraph(AgentState)
 
+builder.add_node("image_analyzer", image_analyzer_node)
 builder.add_node("supervisor", supervisor_node)
 builder.add_node("faq", faq_node)
 builder.add_node("order", order_node)
 builder.add_node("out_of_domain", out_of_domain_node)
+builder.add_node("filter_extractor", filter_extractor_node)
 builder.add_node("clip_embedder", clip_embedding_node)
 builder.add_node("visual_search", visual_search_node)
 builder.add_node("result_formatter", result_formatter_node)
 builder.add_node("summarizer", summarizer_node)
 
-builder.add_edge(START, "supervisor")
+builder.add_edge(START, "image_analyzer")
+builder.add_edge("image_analyzer", "supervisor")
 
 builder.add_conditional_edges(
     "supervisor",
@@ -35,7 +40,7 @@ builder.add_conditional_edges(
     {
         "faq": "faq",
         "order": "order",
-        "visual_search_agent": "clip_embedder",
+        "visual_search_agent": "filter_extractor",
         "out_of_domain": "out_of_domain",
         "summarizer": "summarizer",
     },
@@ -49,7 +54,7 @@ def route_after_agent(state: AgentState) -> str:
     for agent in pending:
         if agent not in executed:
             if agent == "visual_search_agent":
-                return "clip_embedder"
+                return "filter_extractor"
             return agent
             
     return "summarizer"
@@ -62,7 +67,7 @@ builder.add_conditional_edges(
     {
         "faq": "faq",
         "order": "order",
-        "clip_embedder": "clip_embedder",
+        "filter_extractor": "filter_extractor",
         "out_of_domain": "out_of_domain",
         "summarizer": "summarizer",
     }
@@ -74,7 +79,7 @@ builder.add_conditional_edges(
     {
         "faq": "faq",
         "order": "order",
-        "clip_embedder": "clip_embedder",
+        "filter_extractor": "filter_extractor",
         "out_of_domain": "out_of_domain",
         "summarizer": "summarizer",
     }
@@ -86,16 +91,17 @@ builder.add_conditional_edges(
     {
         "faq": "faq",
         "order": "order",
-        "clip_embedder": "clip_embedder",
+        "filter_extractor": "filter_extractor",
         "out_of_domain": "out_of_domain",
         "summarizer": "summarizer",
     }
 )
 
 # Visual Search Pipeline
+builder.add_edge("filter_extractor", "clip_embedder")
 builder.add_edge("clip_embedder", "visual_search")
 builder.add_edge("visual_search", "result_formatter")
-builder.add_edge("result_formatter", END)
+builder.add_edge("result_formatter", "summarizer")
 
 builder.add_edge("summarizer", END)
 

@@ -201,6 +201,66 @@ def fetch_history(conversation_id):
         pass
     return []
 
+def delete_conversation(conversation_id):
+    if not st.session_state.jwt_token: return False
+    try:
+        resp = requests.delete(
+            f"{API_BASE_URL}/chat/conversations/{conversation_id}",
+            headers={"Authorization": f"Bearer {st.session_state.jwt_token}"},
+            timeout=10
+        )
+        return resp.status_code == 200
+    except Exception:
+        return False
+
+
+@st.dialog("📦 Your Order History", width="large")
+def show_orders_dialog():
+    if not st.session_state.jwt_token: return
+    try:
+        with st.spinner("Fetching your orders..."):
+            resp = requests.get(
+                f"{API_BASE_URL}/orders",
+                headers={"Authorization": f"Bearer {st.session_state.jwt_token}"},
+                timeout=10
+            )
+        if resp.status_code == 200:
+            orders = resp.json()
+            if not orders:
+                st.info("You don't have any orders yet.")
+                return
+                
+            for order in orders:
+                status_emoji = "✅" if order["status"] == "delivered" else "🚚" if order["status"] == "shipped" else "⏳"
+                with st.expander(f"{status_emoji} Order **{order['id']}** - ${order['total']} ({order['status'].title()})"):
+                    st.write(f"**Ordered:** {order['ordered_at'][:10]}")
+                    if order.get("delivered_at"):
+                        st.write(f"**Delivered:** {order['delivered_at'][:10]}")
+                    elif order.get("estimated_delivery"):
+                        st.write(f"**Estimated Delivery:** {order['estimated_delivery'][:10]}")
+                    
+                    st.write(f"**Carrier:** {order.get('carrier', 'N/A')}")
+                    
+                    if order.get('return_eligible') is not None:
+                        return_text = f"Yes (Until {order.get('return_deadline', 'N/A')[:10]})" if order.get('return_eligible') else "No"
+                        st.write(f"**Return Eligible:** {return_text}")
+                    
+                    st.markdown("#### Items")
+                    for item in order.get("items", []):
+                        item_name = item.get('name', f"Product {item.get('product_id', 'Unknown')}")
+                        details = []
+                        if item.get("color"):
+                            details.append(f"Color: {item['color']}")
+                        if item.get("size"):
+                            details.append(f"Size: {item['size']}")
+                        
+                        detail_str = f" ({', '.join(details)})" if details else ""
+                        st.markdown(f"- **{item_name}**{detail_str} (x{item.get('quantity', 1)}) - ${item.get('price', 0)}")
+        else:
+            st.error("Failed to load orders. Please try again.")
+    except Exception as e:
+        st.error(f"Error connecting to server: {e}")
+
 def logout():
     """Clear session state and log the user out."""
     st.session_state.jwt_token = None
@@ -221,6 +281,8 @@ with st.sidebar:
             logout()
             st.rerun()
 
+
+
         st.divider()
         st.markdown("### 💬 Recent Chats")
 
@@ -236,11 +298,27 @@ with st.sidebar:
             conv_id = conv.get("conversation_id")
             
             btn_type = "primary" if conv_id == st.session_state.conversation_id else "secondary"
-            if st.button(f"📄 {title}", key=f"btn_{conv_id}", type=btn_type, use_container_width=True):
-                st.session_state.conversation_id = conv_id
-                st.session_state.messages = fetch_history(conv_id)
-                st.session_state.uploader_key += 1
-                st.rerun()
+            
+            col1, col2 = st.columns([5, 1])
+            with col1:
+                if st.button(f"📄 {title}", key=f"btn_{conv_id}", type=btn_type, use_container_width=True):
+                    st.session_state.conversation_id = conv_id
+                    st.session_state.messages = fetch_history(conv_id)
+                    st.session_state.uploader_key += 1
+                    st.rerun()
+            with col2:
+                if st.button("🗑️", key=f"del_{conv_id}", help="Delete chat", use_container_width=True):
+                    if delete_conversation(conv_id):
+                        if st.session_state.conversation_id == conv_id:
+                            st.session_state.conversation_id = str(uuid.uuid4())
+                            st.session_state.messages = []
+                        st.rerun()
+
+        st.divider()
+        st.markdown("### 🚀 Shortcuts")
+        
+        if st.button("📦 Show My Orders", use_container_width=True):
+            show_orders_dialog()
 
         st.divider()
         if st.button("🗑️ Clear Local Chat", use_container_width=True):
@@ -339,6 +417,12 @@ else:
             type=["png", "jpg", "jpeg"],
             key=f"uploader_{st.session_state.uploader_key}"
         )
+        if uploaded_file:
+            col1, col2 = st.columns([3, 1])
+            with col2:
+                if st.button("📤 Send Image without Text", use_container_width=True):
+                    st.session_state.shortcut = "Can you find products similar to this image?"
+                    st.rerun()
 
     # 2. Chat input and toggle button side-by-side (button on right, vertically centered)
     if st.button("➕", key="toggle_uploader"):
@@ -346,6 +430,11 @@ else:
         st.rerun()
 
     prompt = st.chat_input("Ask me about your orders or our policies...")
+    
+    # Check for shortcut trigger
+    if getattr(st.session_state, 'shortcut', None):
+        prompt = st.session_state.shortcut
+        st.session_state.shortcut = None
 
     # ── Dynamic Layout Adjustment via Javascript ──────────────────────────────
     st.components.v1.html(
@@ -427,8 +516,8 @@ else:
         width=0,
     )
     
-    if prompt or uploaded_file:
-        actual_prompt = prompt or "Can you find products similar to this image?"
+    if prompt:
+        actual_prompt = prompt
         
         image_b64 = None
         if uploaded_file:

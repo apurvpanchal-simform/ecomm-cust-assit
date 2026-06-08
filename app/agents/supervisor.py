@@ -15,6 +15,7 @@ load_dotenv()
 SUPERVISOR_SYSTEM_PROMPT = """You are a supervisor managing a conversation between a user and two specialized agents:
 - 'faq': Handles general questions about the company, policies, or generic operations (e.g., return policies, shipping times, generic info).
 - 'order': Handles specific, personalized questions about the user's orders, tracking, refunds, or specific items they bought.
+- 'visual_search_agent': Handles requests to find, search for, or buy products based on a visual description, an uploaded image, or a text search for similar items.
 
 Your task is to analyze the conversation history and the user's latest query, and determine which agents need to act to fully answer the query.
 
@@ -22,7 +23,8 @@ RULES:
 1. Identify all parts of the user's query that require an agent to answer.
 2. If a part requires general policy/info, include 'faq'.
 3. If a part requires specific order lookup/refund/status, include 'order'.
-4. If the query contains BOTH, return both in the list `pending_agents`, ordering them logically (e.g., order first, then faq).
+4. If a part involves finding products or acting on an uploaded image to find things, include 'visual_search_agent'.
+5. If the query contains MULTIPLE, return them in the list `pending_agents`, ordering them logically.
 5. If the query is NOT related to FAQs and NOT related to orders, include 'out_of_domain'.
 6. If the user's message is a greeting, parting, gratitude, or simple chitchat, return an empty list for `pending_agents` and write a brief, warm 1-2 sentence response in the `response` field.
 7. Do NOT answer the user's actual question yourself (except for greetings/chitchat).
@@ -30,7 +32,7 @@ RULES:
 
 
 class Route(BaseModel):
-    pending_agents: list[Literal["faq", "order", "out_of_domain"]] = Field(
+    pending_agents: list[Literal["faq", "order", "visual_search_agent", "out_of_domain"]] = Field(
         description="The list of agents that need to be executed to answer all parts of the user's query. Return an empty list if resolved or if the query is a greeting/chitchat."
     )
     response: str = Field(
@@ -45,13 +47,7 @@ async def supervisor_node(state: AgentState, config: RunnableConfig) -> dict:
 
     messages = state.get("messages", [])
 
-    # Short-circuit: if an image is present, route to visual search pipeline
-    if state.get("image_base64"):
-        return {
-            "pending_agents": ["visual_search_agent"],
-            "executed_agents": [],
-            "next": "visual_search_agent"
-        }
+    # No hard-coded image routing anymore. Supervisor decides based on image_description.
 
     llm = get_llm(temperature=0.0)
     structured_llm = llm.with_structured_output(Route)
@@ -62,9 +58,12 @@ async def supervisor_node(state: AgentState, config: RunnableConfig) -> dict:
     if chat_summary:
         supervisor_messages.append(SystemMessage(content=f"Summary of earlier conversation:\n{chat_summary}"))
 
-    # Only send the last 8 messages to the supervisor for routing decisions.
-    # The query is already in messages as a HumanMessage (added by the /chat endpoint).
-    recent_messages = messages[-8:] if len(messages) > 8 else messages
+    image_desc = state.get("image_description")
+    if image_desc:
+        supervisor_messages.append(SystemMessage(content=f"The user uploaded an image. Image Analysis:\n{image_desc}"))
+
+    summarized_count = state.get("summarized_message_count", 0)
+    recent_messages = messages[summarized_count:]
     for msg in recent_messages:
         supervisor_messages.append(msg)
 
@@ -72,11 +71,17 @@ async def supervisor_node(state: AgentState, config: RunnableConfig) -> dict:
     try:
         response = await structured_llm.ainvoke(supervisor_messages, config=config)
         pending = response.pending_agents or []
-        pending_str = [p.strip() for p in pending if p in ["faq", "order", "out_of_domain"]]
+        pending_str = [p.strip() for p in pending if p in ["faq", "order", "visual_search_agent", "out_of_domain"]]
     except Exception as e:
         import logging
         logging.getLogger(__name__).exception(f"Supervisor LLM Error: {e}")
         pending_str = []
+        
+    # Bypass for images: guarantee visual_search_agent runs for images, 
+    # UNLESS the supervisor explicitly marked the image as out_of_domain.
+    if state.get("image_base64"):
+        if "out_of_domain" not in pending_str and "visual_search_agent" not in pending_str:
+            pending_str.insert(0, "visual_search_agent")
 
     # When the supervisor decides no pending agents and the last message is from the user
     # (meaning chitchat or greeting), we return the response generated in the same call.
