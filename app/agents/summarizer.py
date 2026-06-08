@@ -24,6 +24,8 @@ def _transient_cleanup() -> dict:
         "image_azure_url": None,
         "image_is_safe": None,
         "active_filters": None,
+        "image_description": None,
+        "search_query": None,
     }
 
 async def summarizer_node(state: AgentState, config: RunnableConfig) -> dict:
@@ -78,6 +80,8 @@ async def summarizer_node(state: AgentState, config: RunnableConfig) -> dict:
                 "image_azure_url": None,
                 "image_is_safe": None,
                 "active_filters": None,
+                "image_description": None,
+                "search_query": None,
             }
         except Exception as e:
             import logging

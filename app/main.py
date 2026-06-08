@@ -38,6 +38,8 @@ from app.middleware.auth import (
     get_current_customer,
 )
 
+from app.db.supabase import get_supabase_client
+
 load_dotenv()
 
 logger = logging.getLogger(__name__)
@@ -243,3 +245,30 @@ async def get_chat_history(
             })
             
     return {"messages": formatted_messages}
+
+@app.delete("/chat/conversations/{conversation_id}")
+async def delete_conversation(
+    conversation_id: str,
+    request: Request,
+    customer_id: str = Depends(get_current_customer),
+):
+    """Delete a specific conversation from history."""
+    async with request.app.state.pool.connection() as conn:
+        cursor = await conn.execute(
+            "DELETE FROM customer_conversations WHERE conversation_id = %s AND customer_id = %s RETURNING conversation_id",
+            (conversation_id, customer_id)
+        )
+        row = await cursor.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Conversation not found or not owned by user")
+        await conn.commit()
+    return {"status": "deleted"}
+
+@app.get("/orders")
+async def get_orders(
+    customer_id: str = Depends(get_current_customer),
+):
+    """Fetch raw user orders from Supabase."""
+    supabase = await get_supabase_client()
+    result = await supabase.table("orders").select("*").eq("customer_id", customer_id).order("ordered_at", desc=True).execute()
+    return result.data

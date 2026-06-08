@@ -51,7 +51,6 @@ async def index_all_products():
             # 3. Generate CLIP embedding
             vector = embed_image_bytes(img_bytes)
 
-            # 4. Build Qdrant point
             points.append(PointStruct(
                 id=product["id"],
                 vector=vector,
@@ -59,7 +58,9 @@ async def index_all_products():
                     "product_id": product["id"],
                     "title":       product["title"],
                     "price":       float(product["price"]),
-                    "image_url":   azure_url
+                    "image_url":   azure_url,
+                    "category":    product.get("category", ""),
+                    "description": product.get("description", "")
                 }
             ))
 
