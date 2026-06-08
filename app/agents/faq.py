@@ -3,12 +3,12 @@ from typing import Any
 
 from dotenv import load_dotenv
 from langsmith import traceable
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
+from langchain_core.messages import AIMessage, SystemMessage
 from langchain_core.runnables import RunnableConfig
-from langchain_groq import ChatGroq
 from app.tools.faq_search import search_faq
 from app.graph.state import AgentState
-from app.schemas.agent import AgentResponse, TicketCategory
+from app.schemas.agent import AgentResponse
+from app.services.llm import get_llm
 
 load_dotenv()
 
@@ -29,68 +29,6 @@ Rules:
 8. CRITICAL: If the `search_faq` tool returns an "Error:" or fails, DO NOT call the tool again. Immediately apologize to the user and explain that the search service is temporarily unavailable.
 """
 
-
-@traceable(name="faq_generation")
-def generate_faq_response(
-    agent,
-    conversation: list,
-    config: RunnableConfig,
-) -> tuple[str, list, str | None]:
-
-    new_messages = []
-
-    max_iters = int(os.getenv("MAX_ITERATIONS", "6"))
-    for _ in range(max_iters):
-        response = agent.invoke(conversation, config=config)
-        conversation.append(response)
-        new_messages.append(response)
-
-        if not response.tool_calls:
-            break
-
-        tool_msgs = []
-        for tc in response.tool_calls:
-            try:
-                # `search_faq` takes `query` as argument
-                result = (
-                    str(_TOOL_MAP[tc["name"]].invoke(tc["args"])).strip()
-                    or "No result returned."
-                )
-            except Exception as e:
-                result = f"Error: {e}"
-
-            tool_msgs.append(
-                ToolMessage(content=result, tool_call_id=tc["id"], name=tc["name"])
-            )
-
-        conversation.extend(tool_msgs)
-        new_messages.extend(tool_msgs)
-
-    else:
-        msg = "I'm having trouble processing your question. Please try again."
-        new_messages.append(AIMessage(content=msg))
-        return msg, new_messages, "max_iterations_exceeded"
-
-    final_ai = next(
-        (
-            m
-            for m in reversed(new_messages)
-            if isinstance(m, AIMessage) and not m.tool_calls
-        ),
-        None,
-    )
-
-    if final_ai and isinstance(final_ai.content, list):
-        text = "".join(
-            p.get("text", "") if isinstance(p, dict) else str(p)
-            for p in final_ai.content
-        )
-    else:
-        text = str(final_ai.content) if final_ai else "No response generated."
-
-    return text, new_messages, None
-
-
 @traceable(
     name="faq_node",
     metadata={
@@ -100,11 +38,11 @@ def generate_faq_response(
 async def faq_node(state: AgentState, config: RunnableConfig) -> dict:
 
     query = state.get("query", "")
-    # Only keep the last 12 messages for context to prevent bloated
+    # Only keep the last 8 messages for context to prevent bloated
     # conversations on resumed threads (full history stays in checkpointer).
     # The query is already in messages as a HumanMessage (added by the /chat endpoint).
     all_messages = list(state.get("messages", []))
-    recent_messages = all_messages[-12:] if len(all_messages) > 12 else all_messages
+    recent_messages = all_messages[-8:] if len(all_messages) > 8 else all_messages
     
     # Pre-fetch context using the search tool directly in Python
     try:
@@ -132,7 +70,6 @@ async def faq_node(state: AgentState, config: RunnableConfig) -> dict:
     conversation.append(context_message)
     conversation += recent_messages
 
-    from app.services.llm import get_llm
     llm = get_llm(temperature=0.4)
 
     try:
@@ -149,12 +86,6 @@ async def faq_node(state: AgentState, config: RunnableConfig) -> dict:
             final_resolution_text = resolution_text
             
         error = None
-        requires_human = False
-        confidence = 1.0
-
-        if "ToolNotFoundResponse" in context or "No relevant FAQ articles" in context or "don't have a confident answer" in context:
-            requires_human = True
-            confidence = 0.0
 
     except Exception as exc:
         resolution_text = "Something went wrong while processing your request."
@@ -168,21 +99,14 @@ async def faq_node(state: AgentState, config: RunnableConfig) -> dict:
             final_resolution_text = resolution_text
             
         error = str(exc)
-        requires_human = True
-        confidence = 0.0
 
     agent_response = AgentResponse(
         resolution_text=final_resolution_text,
-        confidence_score=confidence,
-        ticket_category=TicketCategory.FAQ,
-        requires_human=requires_human,
-        escalation_reason=error,
     )
 
     return {
         "messages": new_messages,
         "agent_response": agent_response.model_dump(mode="json"),
-        "structured_output": agent_response.model_dump(mode="json"),
         "error": error,
         "executed_agents": state.get("executed_agents", []) + ["faq"],
     }

@@ -1,5 +1,4 @@
 import os
-import uuid
 from azure.storage.blob import BlobServiceClient
 
 def get_blob_client_service():
@@ -38,12 +37,3 @@ def upload_product_image(image_bytes: bytes, product_id: str, ext: str = "jpg") 
     blob_client.upload_blob(image_bytes, overwrite=True)
     return blob_client.url
 
-def upload_user_image(image_bytes: bytes, ext: str = "jpg") -> str:
-    """Upload user query image temporarily, return URL."""
-    client = get_blob_client_service()
-    container = get_container_name()
-    _ensure_container_exists(client, container)
-    blob_name = f"queries/{uuid.uuid4()}.{ext}"
-    blob_client = client.get_blob_client(container=container, blob=blob_name)
-    blob_client.upload_blob(image_bytes, overwrite=True)
-    return blob_client.url

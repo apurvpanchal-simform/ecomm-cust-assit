@@ -1,4 +1,3 @@
-import os
 from typing import Any
 from app.db.qdrant import get_qdrant_client
 from qdrant_client.models import Filter, FieldCondition, Range
