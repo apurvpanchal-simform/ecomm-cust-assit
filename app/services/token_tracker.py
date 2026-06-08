@@ -96,6 +96,10 @@ class TokenCostCallbackHandler(BaseCallbackHandler):
             logger.error(f"Error logging token usage: {e}")
 
     def _log_usage(self, record: Dict[str, Any]) -> None:
-        """Append the usage record to the JSON Lines file."""
+        """Append the usage record to the JSON Lines file and standard logs."""
+        # Write to the file
         with open(self.log_file, "a", encoding="utf-8") as f:
             f.write(json.dumps(record) + "\n")
+            
+        # Also print to standard output so it shows up in Azure Container Logs
+        logger.info(f"💰 Token Usage Tracked: {json.dumps(record)}")
