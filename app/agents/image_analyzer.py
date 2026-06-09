@@ -2,6 +2,7 @@ from typing import Any
 from langsmith import traceable
 from app.graph.state import AgentState
 from app.services.azure_vision import analyze_image_base64
+from langchain_core.messages import SystemMessage
 import logging
 
 logger = logging.getLogger(__name__)
@@ -33,6 +34,19 @@ async def image_analyzer_node(state: AgentState) -> dict:
         
         logger.info(f"Azure CV Extracted Tags: {tags}")
         logger.info(f"Azure CV Extracted OCR/Caption: {image_description}")
+        
+        UNSAFE_TAGS = {"weapon", "gun", "firearm", "rifle", "pistol", "revolver", "nude", "nsfw", "violence", "blood", "gore", "explosive"}
+        unsafe_found = any(tag.lower() in UNSAFE_TAGS for tag in tags)
+        
+        if unsafe_found:
+            logger.warning(f"Safety violation blocked image with tags: {tags}")
+            return {
+                "image_base64": None,
+                "image_tags": [],
+                "image_description": None,
+                "messages": [SystemMessage(content="SYSTEM: The user's uploaded image was blocked and removed due to safety violations (e.g., weapons or NSFW). Please inform the user politely that their image was rejected, but DO STILL process any valid text requests they made in the same query.")]
+            }
+            
         
         return {
             "image_tags": tags,

@@ -1,55 +1,60 @@
 from langchain_core.messages import SystemMessage, HumanMessage
 from langchain_core.runnables import RunnableConfig
 from app.graph.state import AgentState
+from langsmith import traceable
 
-SUMMARIZER_PROMPT = """You are a helpful assistant responsible for summarizing an ongoing conversation.
-Your goal is to maintain a running summary of the conversation so far, capturing the essential context, user requests, and assistant answers.
+SUMMARIZER_PROMPT = """You are an ultra-concise conversation summarizer.
+Your goal is to aggressively compress older conversation history into a minimal set of facts.
 
 CRITICAL INSTRUCTIONS:
-1. You MUST strictly preserve all specific IDs (like order IDs, customer IDs, and tracking numbers).
-2. ALL IDs must be converted to and stored in strictly lowercase (e.g., "ord-123", not "ORD-123").
+1. Drop all pleasantries, greetings, and conversational filler.
+2. Extract ONLY hard facts, user constraints, preferences, and entity IDs.
+3. You MUST strictly preserve all specific IDs (like order IDs, customer IDs, and tracking numbers).
+4. ALL IDs must be converted to and stored in strictly lowercase (e.g., "ord-123", not "ORD-123").
+5. Format your output as a dense, bulleted list of facts. 
 
-If a previous summary is provided, you must combine it with the new messages to create a comprehensive updated summary.
-Keep the summary concise but ensure no important details (like order numbers, specific questions, or provided answers) are lost.
-Return ONLY the updated summary text.
+If a previous summary is provided, merge the new facts into the existing bulleted list. Do not duplicate facts.
+Return ONLY the updated bulleted list.
 """
 
-def _transient_cleanup() -> dict:
-    """Return a dict that clears bulky transient fields to keep checkpoints lean."""
-    return {
-        "image_base64": None,
-        "image_embedding": None,
-        "visual_results": None,
-        "image_tags": None,
-        "image_azure_url": None,
-        "image_is_safe": None,
-        "active_filters": None,
-        "image_description": None,
-        "search_query": None,
-    }
 
+
+@traceable(name="summarizer_node")
 async def summarizer_node(state: AgentState, config: RunnableConfig) -> dict:
     """Updates the running summary of the conversation if needed."""
     all_messages = state.get("messages", [])
     summarized_count = state.get("summarized_message_count", 0)
     current_summary = state.get("chat_summary", "")
     
-    WINDOW_SIZE = 8
-    CHUNK_SIZE = 6
+    WINDOW_SIZE = 4
+    CHUNK_SIZE = 4
     
     # We want to keep the last WINDOW_SIZE messages completely unsummarized.
     # To prevent "telephone" effect, we wait until we have CHUNK_SIZE extra messages
     # before we run the summarizer.
     if len(all_messages) - summarized_count >= WINDOW_SIZE + CHUNK_SIZE:
-        # Get exactly CHUNK_SIZE messages to summarize
-        messages_to_summarize = all_messages[summarized_count : summarized_count + CHUNK_SIZE]
+        # Dynamic chunking: if only a few messages would be left, grab them all
+        unsummarized = len(all_messages) - summarized_count
+        messages_to_grab = CHUNK_SIZE
+        if unsummarized - CHUNK_SIZE < WINDOW_SIZE:
+            # Not enough left to form a meaningful window, just grab everything
+            # up to the window boundary
+            messages_to_grab = unsummarized - WINDOW_SIZE + 1
+            
+        messages_to_summarize = all_messages[summarized_count : summarized_count + messages_to_grab]
                 
         # Format these messages into a readable string
         formatted_messages = []
         for msg in messages_to_summarize:
-            role = "User" if isinstance(msg, HumanMessage) else "Assistant"
+            msg_type = getattr(msg, "type", "")
+            # Skip ToolMessages to avoid polluting the summary with raw tool outputs
+            if msg_type == "tool":
+                continue
+                
+            role = "User" if msg_type == "human" else "Assistant"
             content = msg.content
-            formatted_messages.append(f"{role}: {content}")
+            if content:
+                formatted_messages.append(f"{role}: {content}")
             
         new_content_text = "\n\n".join(formatted_messages)
         
@@ -66,29 +71,32 @@ async def summarizer_node(state: AgentState, config: RunnableConfig) -> dict:
         try:
             response = await llm.ainvoke(prompt_messages, config=config)
             new_summary = response.content
+            
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.info(f"\n========== NEW CHAT SUMMARY ==========\n{new_summary}\n======================================\n")
+            
+            try:
+                import os
+                os.makedirs("data", exist_ok=True)
+                with open("data/summaries.log", "a", encoding="utf-8") as f:
+                    f.write(f"========== SUMMARY ==========\n{new_summary}\n\n")
+            except Exception as e:
+                logger.warning(f"Could not write to summaries.log: {e}")
+                
             # The new summarized count should include all messages we just summarized
             new_summarized_count = summarized_count + len(messages_to_summarize)
                         
             return {
                 "chat_summary": new_summary,
-                "summarized_message_count": new_summarized_count,
-                # Clear transient fields to keep checkpoints lean
-                "image_base64": None,
-                "image_embedding": None,
-                "visual_results": None,
-                "image_tags": None,
-                "image_azure_url": None,
-                "image_is_safe": None,
-                "active_filters": None,
-                "image_description": None,
-                "search_query": None,
+                "summarized_message_count": new_summarized_count
             }
         except Exception as e:
             import logging
             logging.getLogger(__name__).exception(f"[SUMMARIZER] LLM Error: {e}")
-            return _transient_cleanup()
+            return {}
             
     # If no summarization is needed, return an empty dict (state unchanged)
     import logging
     logging.getLogger(__name__).debug(f"[SUMMARIZER] Sleeping. Total msgs: {len(all_messages)}, Summarized: {summarized_count}")
-    return _transient_cleanup()
+    return {}

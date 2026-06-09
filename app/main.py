@@ -1,4 +1,5 @@
 import os
+import asyncio
 import logging
 import redis.asyncio as redis
 
@@ -38,9 +39,13 @@ from app.middleware.auth import (
     get_current_customer,
 )
 
+from app.middleware.rate_limit import (
+    rate_limit_customer,
+)
+
 from app.db.supabase import get_supabase_client
 
-load_dotenv()
+load_dotenv(override=True)
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
@@ -83,6 +88,7 @@ async def lifespan(app: FastAPI):
             # The customer_conversations table is managed in app/db/schema.sql
             
             app.state.pool = pool
+            app.state.redis = redis_client
 
             logger.info("Initializing AsyncRedisSaver...")
             redis_saver = AsyncRedisSaver(
@@ -152,7 +158,7 @@ async def chat(
     request: Request,
     chat_request: ChatRequest,
     customer_id: str = Depends(
-        get_current_customer
+        rate_limit_customer
     ),
 ):
 
@@ -181,6 +187,14 @@ async def chat(
         "callbacks": [TokenCostCallbackHandler()]
     }
 
+    # Enforce conversation length limit
+    current_state = await request.app.state.graph.aget_state(config)
+    if len(current_state.values.get("messages", [])) > 100:
+        raise HTTPException(
+            status_code=400,
+            detail="Conversation has reached its maximum length. Please start a new chat."
+        )
+
     state_input = {
         "query": chat_request.query,
         "customer_id": customer_id,
@@ -190,10 +204,25 @@ async def chat(
         "executed_agents": [],
     }
 
-    result = await request.app.state.graph.ainvoke(
-        state_input,
-        config=config,
-    )
+    logger.info("--- GRAPH EXECUTION START ---")
+    async def consume_graph():
+        async for event in request.app.state.graph.astream(
+            state_input,
+            config=config,
+            stream_mode="updates",
+        ):
+            for node_name in event.keys():
+                logger.info(f"Finished node: {node_name}")
+                
+    try:
+        await asyncio.wait_for(consume_graph(), timeout=45.0)
+    except asyncio.TimeoutError:
+        logger.error("Graph execution timed out after 45 seconds.")
+        raise HTTPException(status_code=504, detail="Request to the agent timed out. Please try again.")
+    logger.info("--- GRAPH EXECUTION END ---")
+
+    final_state = await request.app.state.graph.aget_state(config)
+    result = final_state.values
 
     return result
 
@@ -238,7 +267,7 @@ async def get_chat_history(
     formatted_messages = []
     for msg in messages:
         # Avoid including empty or pure tool-call messages
-        if msg.type in ["human", "ai"] and msg.content:
+        if msg.type in ["human", "ai"] and msg.content and not getattr(msg, "tool_calls", None):
             formatted_messages.append({
                 "role": "user" if msg.type == "human" else "assistant",
                 "content": str(msg.content)
@@ -271,4 +300,13 @@ async def get_orders(
     """Fetch raw user orders from Supabase."""
     supabase = await get_supabase_client()
     result = await supabase.table("orders").select("*").eq("customer_id", customer_id).order("ordered_at", desc=True).execute()
+    return result.data
+
+@app.get("/products")
+async def get_products(
+    customer_id: str = Depends(get_current_customer),
+):
+    """Fetch raw products from Supabase."""
+    supabase = await get_supabase_client()
+    result = await supabase.table("products").select("*").execute()
     return result.data

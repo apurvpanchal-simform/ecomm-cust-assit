@@ -14,12 +14,18 @@ logger = logging.getLogger(__name__)
 PRIMARY_MODEL = os.getenv("PRIMARY_MODEL")
 FALLBACK_MODEL = os.getenv("FALLBACK_MODEL")
 
+NOMIC_EMBEDDING_MODEL = os.getenv("NOMIC_EMBEDDING_MODEL", "nomic-embed-text-v1.5")
+GEMINI_EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "models/gemini-embedding-2")
+
 MODEL_PRICING = {
     PRIMARY_MODEL: {"input": 0.59, "output": 0.59}, # Please update price for the actual primary model used
     FALLBACK_MODEL: {"input": 0.3, "output": 2.50},
     # Defaults as fallback
     "llama-3.3-70b-versatile": {"input": 0.59, "output": 0.79},
     "gemini-2.5-flash": {"input": 0.075, "output": 0.30},
+    # Embedding Models (Free Tier Pricing)
+    NOMIC_EMBEDDING_MODEL: {"input": 0.0, "output": 0.0}, # Free up to 10M tokens/month (otherwise $0.10/1M)
+    GEMINI_EMBEDDING_MODEL: {"input": 0.0, "output": 0.0}, # Free of charge on Free Tier (otherwise $0.20/1M)
 }
 
 class TokenCostCallbackHandler(BaseCallbackHandler):
@@ -94,6 +100,30 @@ class TokenCostCallbackHandler(BaseCallbackHandler):
             self._log_usage(record)
         except Exception as e:
             logger.error(f"Error logging token usage: {e}")
+
+    def log_embedding_cost(self, model_name: str, input_tokens: int) -> None:
+        """Manually log embedding cost since LangChain doesn't fire on_llm_end for embeddings consistently."""
+        try:
+            cost = 0.0
+            if model_name in MODEL_PRICING:
+                pricing = MODEL_PRICING[model_name]
+                cost = (input_tokens / 1_000_000) * pricing["input"]
+
+            self.cumulative_cost_usd += cost
+
+            record = {
+                "timestamp": datetime.utcnow().isoformat() + "Z",
+                "model_name": model_name,
+                "input_tokens": input_tokens,
+                "output_tokens": 0,
+                "total_tokens": input_tokens,
+                "approx_cost_usd": cost,
+                "cumulative_cost_usd": self.cumulative_cost_usd,
+            }
+
+            self._log_usage(record)
+        except Exception as e:
+            logger.error(f"Error logging embedding usage: {e}")
 
     def _log_usage(self, record: Dict[str, Any]) -> None:
         """Append the usage record to the JSON Lines file and standard logs."""

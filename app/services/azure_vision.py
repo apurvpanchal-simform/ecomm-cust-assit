@@ -25,6 +25,8 @@ def analyze_image_bytes(image_bytes: bytes) -> dict:
         return {"caption": "", "tags": [], "ocr_text": ""}
         
     try:
+        logger.info("\n==============================================")
+        logger.info("Hitting Azure AI Vision for Image Analysis...")
         result = client.analyze(
             image_data=image_bytes,
             visual_features=[
@@ -32,10 +34,12 @@ def analyze_image_bytes(image_bytes: bytes) -> dict:
                 VisualFeatures.READ
             ]
         )
+        logger.info("Azure AI Vision response received.")
         
         # We removed CAPTION because it is unsupported in some Azure regions
         caption = ""
         tags = [tag.name for tag in result.tags.list] if result.tags else []
+        logger.info(f"-> Extracted Tags: {tags}")
         
         ocr_lines = []
         if result.read and result.read.blocks:
@@ -43,6 +47,8 @@ def analyze_image_bytes(image_bytes: bytes) -> dict:
                 for line in block.lines:
                     ocr_lines.append(line.text)
         ocr_text = " ".join(ocr_lines)
+        logger.info(f"-> Extracted OCR/Description: {ocr_text}")
+        logger.info("==============================================\n")
         
         return {
             "caption": caption,

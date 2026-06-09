@@ -5,12 +5,12 @@ from dotenv import load_dotenv
 from langsmith import traceable
 from langchain_core.messages import AIMessage, SystemMessage, ToolMessage
 from langchain_core.runnables import RunnableConfig
-from app.graph.state import AgentState
-from app.schemas.agent import AgentResponse
+
 from app.tools.order_lookup import get_customer_orders
 from app.tools.order_details import get_order_details
 from app.tools.order_items import search_order_items
 from app.services.llm import get_llm
+from app.graph.state import AgentState
 
 load_dotenv()
 
@@ -61,6 +61,7 @@ Rules:
 6. If a tool fails or returns an Error, DO NOT call it again. Explain the issue politely.
 7. Be concise but thorough.
 8. If the exact answer or data you need is already present in the 'Summary of earlier conversation', you may use it directly without making a duplicate tool call.
+9. CRITICAL: If you receive a "specific task for this turn", you MUST prioritize that task and ignore unrelated parts of the user's broader conversation.
 """
 
 
@@ -139,38 +140,29 @@ async def order_node(state: AgentState, config: RunnableConfig) -> dict:
     if not customer_id:
         msg = "Unable to verify your identity. Please sign in and try again."
         
-        all_messages = list(state.get("messages", []))
-        last_msg = all_messages[-1] if all_messages else None
-        if last_msg and hasattr(last_msg, 'type') and last_msg.type == "ai":
-            merged_content = f"{last_msg.content}\n\n{msg}"
-            new_msgs = [AIMessage(content=merged_content, id=last_msg.id)]
-            final_msg = merged_content
-        else:
-            new_msgs = [AIMessage(content=msg)]
-            final_msg = msg
-            
-        agent_response = AgentResponse(
-            resolution_text=final_msg,
-        )
+        new_msgs = [AIMessage(content=msg, name="order")]
+        final_msg = msg
+        new_msgs = [AIMessage(content=msg, name="order")]
         return {
-            **state,
             "messages": new_msgs,
-            "agent_response": agent_response.model_dump(mode="json"),
             "error": "missing_customer_id",
             "executed_agents": state.get("executed_agents", []) + ["order"],
         }
 
-    # Send all unsummarized messages to ensure no context gap
-    # The query is already in messages as a HumanMessage (added by the /chat endpoint).
-    all_messages = list(state.get("messages", []))
+    # Use all recent messages in sequential mode so we can read upstream outputs
     summarized_count = state.get("summarized_message_count", 0)
-    recent_messages = all_messages[summarized_count:]
+    recent_messages = state.get("messages", [])[summarized_count:]
     
     conversation = [SystemMessage(content=SYSTEM_PROMPT)]
     
     chat_summary = state.get("chat_summary", "")
     if chat_summary:
         conversation.append(SystemMessage(content=f"Summary of earlier conversation:\n{chat_summary}"))
+        
+    sub_queries = state.get("sub_queries") or {}
+    sub_query = sub_queries.get("order")
+    if sub_query:
+        conversation.append(SystemMessage(content=f"Your specific task for this turn: {sub_query}"))
         
     conversation += recent_messages
 
@@ -188,34 +180,19 @@ async def order_node(state: AgentState, config: RunnableConfig) -> dict:
                 final_ai_idx = i
                 break
                 
-        last_msg = all_messages[-1] if all_messages else None
-        if last_msg and hasattr(last_msg, 'type') and last_msg.type == "ai" and final_ai_idx != -1:
-            merged_content = f"{last_msg.content}\n\n{new_messages[final_ai_idx].content}"
-            new_messages[final_ai_idx] = AIMessage(content=merged_content, id=last_msg.id)
-            final_resolution_text = merged_content
-        else:
-            final_resolution_text = resolution_text
+        if final_ai_idx != -1:
+            # Add name="order" to the final AI message from the tool loop
+            new_messages[final_ai_idx] = AIMessage(content=new_messages[final_ai_idx].content, name="order")
+            
+        final_resolution_text = resolution_text
 
     except Exception as exc:
-        resolution_text = "Something went wrong while processing your order request."
-        last_msg = all_messages[-1] if all_messages else None
-        if last_msg and hasattr(last_msg, 'type') and last_msg.type == "ai":
-            merged_content = f"{last_msg.content}\n\n{resolution_text}"
-            new_messages = [AIMessage(content=merged_content, id=last_msg.id)]
-            final_resolution_text = merged_content
-        else:
-            new_messages = [AIMessage(content=resolution_text)]
-            final_resolution_text = resolution_text
-            
+        resolution_text = "I encountered an error while trying to process your order. Please try again."
+        new_messages = [AIMessage(content=resolution_text, name="order")]
         error = str(exc)
-
-    agent_response = AgentResponse(
-        resolution_text=final_resolution_text,
-    )
 
     return {
         "messages": new_messages,
-        "agent_response": agent_response.model_dump(mode="json"),
         "error": error,
         "executed_agents": state.get("executed_agents", []) + ["order"],
     }

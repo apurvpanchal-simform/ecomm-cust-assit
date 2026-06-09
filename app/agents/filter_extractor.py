@@ -3,8 +3,9 @@ from pydantic import BaseModel, Field
 from langsmith import traceable
 from langchain_core.messages import SystemMessage
 from langchain_core.runnables import RunnableConfig
-from app.graph.state import AgentState
+
 from app.services.llm import get_llm
+from app.graph.state import AgentState
 import logging
 
 logger = logging.getLogger(__name__)
@@ -18,6 +19,7 @@ Rules:
 3. If the user mentions a minimum budget (e.g. "over $20"), set `min_price`.
 4. If they just say "find this" and an image is present, the search query should heavily rely on the image description.
 5. Do NOT include price terms in the `search_query` itself (e.g. "red shoes" instead of "red shoes under 50").
+6. CRITICAL: If you receive a "specific task for this turn", you MUST prioritize that task and ignore unrelated parts of the user's broader conversation.
 """
 
 class SearchConstraints(BaseModel):
@@ -36,17 +38,23 @@ async def filter_extractor_node(state: AgentState, config: RunnableConfig) -> di
     
     chat_summary = state.get("chat_summary", "")
     if chat_summary:
-        messages_to_send.append(SystemMessage(content=f"Summary of earlier conversation:\n{chat_summary}"))
+        messages_to_send.append(SystemMessage(content=f"Background Context (Older info, lower priority):\n{chat_summary}"))
         
     image_desc = state.get("image_description")
     if image_desc:
         messages_to_send.append(SystemMessage(content=f"The user uploaded an image. Image Analysis:\n{image_desc}"))
         
-    # Send all unsummarized messages to ensure context
-    all_messages = state.get("messages", [])
+    # Use all recent messages in sequential mode
     summarized_count = state.get("summarized_message_count", 0)
-    recent_messages = all_messages[summarized_count:]
+    recent_messages = state.get("messages", [])[summarized_count:]
     
+    sub_queries = state.get("sub_queries") or {}
+    sub_query = sub_queries.get("visual_search_agent")
+    if sub_query:
+        messages_to_send.append(SystemMessage(content=f"Your specific task for this turn: {sub_query}"))
+    
+    if recent_messages:
+        messages_to_send.append(SystemMessage(content="Latest Conversation (Highest priority):"))
     for msg in recent_messages:
         messages_to_send.append(msg)
         
