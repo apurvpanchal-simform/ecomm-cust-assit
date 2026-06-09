@@ -126,6 +126,12 @@ def send_message(query: str, image_b64: str = None) -> str | None:
         if resp.status_code == 200:
             data = resp.json()
             return extract_response_text(data)
+        elif resp.status_code == 429:
+            try:
+                detail = resp.json().get("detail", "Too Many Requests")
+            except Exception:
+                detail = "Too Many Requests"
+            return f"⚠️ **{detail}**"
         else:
             return f"Error: Server returned status {resp.status_code}."
     except requests.RequestException as e:
@@ -255,9 +261,45 @@ def show_orders_dialog():
                             details.append(f"Size: {item['size']}")
                         
                         detail_str = f" ({', '.join(details)})" if details else ""
-                        st.markdown(f"- **{item_name}**{detail_str} (x{item.get('quantity', 1)}) - ${item.get('price', 0)}")
+                        
+                        col1, col2 = st.columns([1, 6])
+                        with col1:
+                            if item.get("image"):
+                                st.image(item["image"], width=50)
+                        with col2:
+                            st.markdown(f"**{item_name}**{detail_str} (x{item.get('quantity', 1)})<br>${item.get('price', 0)}", unsafe_allow_html=True)
         else:
             st.error("Failed to load orders. Please try again.")
+    except Exception as e:
+        st.error(f"Error connecting to server: {e}")
+
+@st.dialog("🛍️ Product Catalog", width="large")
+def show_products_dialog():
+    if not st.session_state.jwt_token: return
+    try:
+        with st.spinner("Fetching products..."):
+            resp = requests.get(
+                f"{API_BASE_URL}/products",
+                headers={"Authorization": f"Bearer {st.session_state.jwt_token}"},
+                timeout=10
+            )
+        if resp.status_code == 200:
+            products = resp.json()
+            if not products:
+                st.info("No products available.")
+                return
+                
+            for product in products:
+                with st.expander(f"**{product['title']}** - ${product['price']}"):
+                    col1, col2 = st.columns([1, 3])
+                    with col1:
+                        if product.get('image'):
+                            st.image(product['image'], width=100)
+                    with col2:
+                        st.write(f"**Category:** {product.get('category', 'N/A')}")
+                        st.write(f"{product.get('description', '')}")
+        else:
+            st.error("Failed to load products. Please try again.")
     except Exception as e:
         st.error(f"Error connecting to server: {e}")
 
@@ -319,6 +361,9 @@ with st.sidebar:
         
         if st.button("📦 Show My Orders", use_container_width=True):
             show_orders_dialog()
+
+        if st.button("🛍️ Show All Products", use_container_width=True):
+            show_products_dialog()
 
         st.divider()
         if st.button("🗑️ Clear Local Chat", use_container_width=True):

@@ -1,4 +1,4 @@
-"""Shared LangGraph state definitions."""
+"""Shared LangGraph state definitions and state utility helpers."""
 
 from typing import Annotated, Any, TypedDict
 
@@ -12,7 +12,6 @@ class AgentState(TypedDict, total=False):
     customer_id: str
     session_id: str
     query: str
-    agent_response: dict[str, Any]
     error: str | None
     next: str
     chat_summary: str
@@ -30,3 +29,4 @@ class AgentState(TypedDict, total=False):
     active_filters: dict[str, Any] | None
     image_description: str | None
     search_query: str | None
+    sub_queries: dict[str, str] | None

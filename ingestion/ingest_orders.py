@@ -84,6 +84,10 @@ def shift_timestamps(orders):
 def seed_orders():
     create_table_if_not_exists()
     
+    # Fetch product images to attach to order items
+    products_response = supabase.table("products").select("id, azure_image_url, image").execute()
+    product_map = {str(p["id"]): p.get("azure_image_url") or p.get("image") for p in products_response.data}
+
     with open("data/orders.json", "r") as f:
         orders = json.load(f)
 
@@ -96,6 +100,11 @@ def seed_orders():
         for order in batch:
             order.pop("partition_key", None)
             order.pop("tracking_number", None)
+            
+            for item in order.get("items", []):
+                pid = str(item.get("product_id"))
+                if pid in product_map and product_map[pid]:
+                    item["image"] = product_map[pid]
 
         response = supabase.table("orders").upsert(batch, on_conflict="id").execute()
         print(f"Inserted/Updated {len(response.data)} orders")

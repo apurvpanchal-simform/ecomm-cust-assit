@@ -32,7 +32,7 @@ async def ensure_product_images_collection():
         await client.create_collection(
             collection_name=collection_name,
             vectors_config=VectorParams(
-                size=512,           # CLIP ViT-B/32 output dim
+                size=768,           # SigLIP ViT-B/16 output dim
                 distance=Distance.COSINE
             )
         )

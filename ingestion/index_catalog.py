@@ -18,7 +18,7 @@ from app.services.clip_embedder import embed_image_bytes
 from app.services.azure_blob import upload_product_image
 from supabase import create_client
 
-load_dotenv()
+load_dotenv(override=True)
 
 supabase = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_KEY"])
 qdrant = get_qdrant_client()

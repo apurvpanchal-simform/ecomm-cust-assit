@@ -4,7 +4,8 @@ from app.db.qdrant import get_qdrant_client
 from qdrant_client.models import Filter, FieldCondition, Range
 from app.services.llm import get_llm
 from app.services.clip_embedder import embed_text
-from langchain_core.messages import SystemMessage, HumanMessage
+from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
+from langsmith import traceable
 import json
 import logging
 
@@ -29,6 +30,7 @@ def build_filters(active_filters: dict | None):
     
     return Filter(must=conditions) if conditions else None
 
+@traceable(name="visual_search_node")
 async def visual_search_node(state: Any) -> dict:
     """Search Qdrant product_images collection with CLIP vector and hybrid LLM reranking."""
     
@@ -40,7 +42,25 @@ async def visual_search_node(state: Any) -> dict:
     
     # 1. Determine primary vector
     query_vector = None
-    if image_embedding:
+    if image_embedding and search_query:
+        try:
+            # MULTIMODAL HYBRID SEARCH: Combine Image + Text into a single vector!
+            # Since CLIP maps both text and images to the exact same dimensional space,
+            # we can literally average the vectors to search for both simultaneously.
+            text_vector = embed_text(search_query)
+            
+            # Weight the image slightly higher (60% image, 40% text)
+            combined = [img * 0.6 + txt * 0.4 for img, txt in zip(image_embedding, text_vector)]
+            
+            # L2 Normalize the combined vector so Qdrant's Cosine similarity works correctly
+            norm = sum(v * v for v in combined) ** 0.5
+            query_vector = [v / norm for v in combined] if norm > 0 else combined
+            
+        except Exception as e:
+            logger.error(f"Failed to combine multimodal vectors: {e}")
+            query_vector = image_embedding # Fallback to image only
+            
+    elif image_embedding:
         query_vector = image_embedding
     elif search_query:
         try:
@@ -59,8 +79,8 @@ async def visual_search_node(state: Any) -> dict:
             collection_name="product_images",
             query=query_vector,
             query_filter=filters,
-            limit=5, # Reduced from 10 to prevent LLM output token truncation during reranking
-            score_threshold=0.20,
+            limit=5,
+            score_threshold=0.35,
             with_payload=True
         )
         
@@ -111,8 +131,31 @@ async def visual_search_node(state: Any) -> dict:
         else:
             final_list = candidates
 
-        return {"visual_results": final_list[:5]}
+        final_results = final_list[:5]
         
     except Exception as e:
         logger.exception(f"Visual search error: {e}")
-        return {"visual_results": []}
+        final_results = []
+        
+    if not final_results:
+        msg = "I couldn't find any products matching your search."
+    else:
+        msg = "Here are the top matches I found:\n\n"
+        for idx, item in enumerate(final_results):
+            title = item.get("title", f"Product {idx+1}")
+            price = item.get("price", "N/A")
+            image_url = item.get("image_url", "")
+            
+            msg += f"**{title}** - ${price}\n"
+            if image_url:
+                msg += f'<img src="{image_url}" width="150" style="border-radius: 8px; margin-top: 5px;">\n\n'
+            else:
+                msg += "\n"
+
+    new_messages = [AIMessage(content=msg, name="visual_search_agent")]
+
+    return {
+        "visual_results": final_results,
+        "messages": new_messages,
+        "executed_agents": state.get("executed_agents", []) + ["visual_search_agent"]
+    }

@@ -22,6 +22,30 @@ class AsyncDualCheckpointer(BaseCheckpointSaver):
         self.redis_saver = redis_saver
         self.postgres_saver = postgres_saver
 
+    async def _expire_thread_keys(self, thread_id: str, ttl: int = 3600):
+        """Scans and expires all LangGraph checkpoint keys associated with a thread."""
+        if not thread_id or not hasattr(self.redis_saver, "_redis"):
+            return
+            
+        try:
+            redis_client = self.redis_saver._redis
+            cursor = 0
+            while True:
+                cursor, keys = await redis_client.scan(
+                    cursor=cursor, 
+                    match=f"checkpoint*{thread_id}*", 
+                    count=100
+                )
+                if keys:
+                    async with redis_client.pipeline(transaction=False) as pipe:
+                        for key in keys:
+                            pipe.expire(key, ttl)
+                        await pipe.execute()
+                if cursor == 0:
+                    break
+        except Exception as e:
+            logger.error(f"Failed to set Redis TTL for thread {thread_id}: {e}")
+
     async def aget_tuple(
         self,
         config: RunnableConfig,
@@ -55,14 +79,9 @@ class AsyncDualCheckpointer(BaseCheckpointSaver):
                     {}
                 )
                 
-                # Set TTL on the restored keys
+                # Set TTL on all restored keys
                 thread_id = tuple_.config.get("configurable", {}).get("thread_id")
-                if thread_id and hasattr(self.redis_saver, "_redis"):
-                    redis_client = self.redis_saver._redis
-                    latest_id = tuple_.checkpoint["id"]
-                    
-                    await redis_client.expire(f"checkpoint:{thread_id}:{latest_id}", 3600)
-                    await redis_client.expire(f"checkpoint_metadata:{thread_id}:{latest_id}", 3600)
+                await self._expire_thread_keys(thread_id)
             except Exception as e:
                 logger.error(f"Failed to warm Redis cache: {e}")
         else:
@@ -95,19 +114,9 @@ class AsyncDualCheckpointer(BaseCheckpointSaver):
         res = await self.redis_saver.aput(config, checkpoint, metadata, new_versions)
         
         # Prune old checkpoints from Redis — keep only the latest one.
-        # FIX: We remove the dangerous O(N) scan_iter loop. Redis will naturally evict 
-        # old checkpoints because we now set a 1-hour TTL on every write.
-        try:
-            thread_id = config.get("configurable", {}).get("thread_id")
-            if thread_id and hasattr(self.redis_saver, "_redis"):
-                redis_client = self.redis_saver._redis
-                latest_id = checkpoint["id"]
-                
-                # Fast O(1) TTL setting (1 hour = 3600 seconds)
-                await redis_client.expire(f"checkpoint:{thread_id}:{latest_id}", 3600)
-                await redis_client.expire(f"checkpoint_metadata:{thread_id}:{latest_id}", 3600)
-        except Exception as e:
-            logger.error(f"Failed to set Redis TTL for thread {thread_id}: {e}")
+        # We apply a 1-hour TTL to ALL LangGraph keys associated with this thread.
+        thread_id = config.get("configurable", {}).get("thread_id")
+        await self._expire_thread_keys(thread_id)
             
         return res
 

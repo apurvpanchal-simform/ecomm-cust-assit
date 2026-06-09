@@ -1,7 +1,9 @@
 import asyncio
 from typing import Any
 from app.services.clip_embedder import embed_image_base64, embed_text
+from langsmith import traceable
 
+@traceable(name="clip_embedding_node")
 async def clip_embedding_node(state: Any) -> dict:
     """Generate CLIP embedding — pure image OR text-only."""
     # If there's an image, we use image to search
