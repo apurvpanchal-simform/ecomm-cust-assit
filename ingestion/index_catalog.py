@@ -15,6 +15,8 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app.db.qdrant import get_qdrant_client, ensure_product_images_collection
 from app.services.clip_embedder import embed_image_bytes
+from app.services.sparse_embedder import embed_sparse_text
+# from app.services.azure_vision import vectorize_image_bytes
 from app.services.azure_blob import upload_product_image
 from supabase import create_client
 
@@ -24,8 +26,8 @@ supabase = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_KEY"])
 qdrant = get_qdrant_client()
 
 async def index_all_products():
-    # Make sure collection exists
-    await ensure_product_images_collection()
+    # Recreate collection to match the new 1152 dimensions of SigLIP2
+    await ensure_product_images_collection(recreate=True)
     
     # Fetch all products from Supabase
     products = supabase.table("products").select("*").execute().data
@@ -48,12 +50,19 @@ async def index_all_products():
             # 2. Upload to Azure Blob Storage
             azure_url = upload_product_image(img_bytes, str(product["id"]))
 
-            # 3. Generate CLIP embedding
-            vector = embed_image_bytes(img_bytes)
+            # 3. Generate Dense SigLIP embedding
+            dense_vector = embed_image_bytes(img_bytes)
+
+            # 4. Generate Sparse BM25 embedding
+            text_to_embed = f"{product.get('title', '')} {product.get('category', '')} {product.get('description', '')}"
+            sparse_vector = embed_sparse_text(text_to_embed)
 
             points.append(PointStruct(
                 id=product["id"],
-                vector=vector,
+                vector={
+                    "": dense_vector,
+                    "text": sparse_vector
+                },
                 payload={
                     "product_id": product["id"],
                     "title":       product["title"],

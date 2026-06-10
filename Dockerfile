@@ -26,10 +26,14 @@ RUN uv pip install -r pyproject.toml
 # 3. Copy application code
 COPY . /app
 
-# 4. Pre-download CLIP model weights so the app starts instantly
-ENV TORCH_HOME=/model_cache
-ENV XDG_CACHE_HOME=/model_cache
-RUN /app/.venv/bin/python -c "import open_clip; open_clip.create_model_and_transforms('ViT-B-32', pretrained='openai')"
+# 4. Pre-download HuggingFace model weights so the app starts instantly
+# Note: Pass your HF token during build: docker build --build-arg HF_TOKEN=hf_...
+ARG HF_TOKEN
+ENV HF_HOME=/model_cache
+RUN /app/.venv/bin/python -c "import os; from transformers import AutoProcessor, AutoModel; \
+    token = os.environ.get('HF_TOKEN'); \
+    AutoProcessor.from_pretrained('google/siglip-base-patch16-224', token=token); \
+    AutoModel.from_pretrained('google/siglip-base-patch16-224', token=token)"
 
 
 # Stage 2: Runtime
@@ -40,10 +44,9 @@ WORKDIR /app
 # Copy the highly optimized virtual environment from the builder stage
 COPY --from=builder /app/.venv /app/.venv
 
-# Copy the pre-downloaded CLIP model weights
+# Copy the pre-downloaded HuggingFace model weights
 COPY --from=builder /model_cache /model_cache
-ENV TORCH_HOME=/model_cache
-ENV XDG_CACHE_HOME=/model_cache
+ENV HF_HOME=/model_cache
 
 # Set PATH to use the virtual environment
 ENV PATH="/app/.venv/bin:$PATH"

@@ -1,14 +1,14 @@
 import os
-from typing import Literal
 
 from dotenv import load_dotenv
-from pydantic import BaseModel, Field
 from langsmith import traceable
 from langchain_core.messages import SystemMessage, AIMessage
 from langchain_core.runnables import RunnableConfig
 from app.services.llm import get_llm
 
 from app.graph.state import AgentState
+from app.graph.utils import filter_tool_messages
+from app.schemas.agent import Route
 
 load_dotenv()
 
@@ -34,25 +34,6 @@ RULES:
 10. SEQUENTIAL EXECUTION RULE: You MUST order the `pending_agents` list logically. If Agent B needs information that will be found by Agent A, put Agent A first! (e.g., if finding an order's item category is needed before searching the FAQ for its warranty, put 'order' before 'faq').
 11. SUB-QUERIES RULE: You MUST provide a precise `sub_queries` entry for each agent you trigger. Tell the agent exactly what its job is for this turn. If it needs to wait for data from a previous agent, explicitly tell it to "Read the conversation history to find X, then do Y".
 """
-
-
-class Route(BaseModel):
-    pending_agents: list[Literal["faq", "order", "visual_search_agent"]] = Field(
-        description="The ordered list of agents to execute. Put data-gathering agents first if others depend on them. Return an empty list if the query is ONLY a greeting, chitchat, vague search, or completely out-of-domain."
-    )
-    sub_queries: dict[str, str] = Field(
-        default_factory=dict,
-        description="A dictionary mapping each pending agent name to its specific instructions (e.g., {'order': 'Find the last order', 'faq': 'Find the warranty for the item the order agent finds'})."
-    )
-    response: str = Field(
-        default="",
-        description="If you cannot fulfill part or all of the query (due to safety, out-of-domain, or vagueness), or if it's a greeting, provide your direct response/refusal here."
-    )
-    image_intent: bool = Field(
-        default=False,
-        description="Set to true if the user uploaded an image and wants to search or identify it."
-    )
-
 
 @traceable(name="supervisor_node", metadata={"agent": "supervisor"})
 async def supervisor_node(state: AgentState, config: RunnableConfig) -> dict:
@@ -81,7 +62,7 @@ async def supervisor_node(state: AgentState, config: RunnableConfig) -> dict:
         supervisor_messages.append(SystemMessage(content=f"The user uploaded an image. Image Analysis:\n" + "\n".join(analysis_text)))
 
     summarized_count = state.get("summarized_message_count", 0)
-    recent_messages = messages[summarized_count:]
+    recent_messages = filter_tool_messages(messages[summarized_count:])
     if recent_messages:
         supervisor_messages.append(SystemMessage(content="Latest Conversation (Highest priority):"))
     for msg in recent_messages:

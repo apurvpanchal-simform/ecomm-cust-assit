@@ -7,6 +7,7 @@ from langchain_core.messages import AIMessage, SystemMessage
 from langchain_core.runnables import RunnableConfig
 from app.tools.faq_search import search_faq
 from app.graph.state import AgentState
+from app.graph.utils import filter_tool_messages
 from app.services.llm import get_llm
 
 load_dotenv()
@@ -71,7 +72,7 @@ async def faq_node(state: AgentState, config: RunnableConfig) -> dict:
         conversation.append(SystemMessage(content=f"Your specific task for this turn: {sub_query}"))
         
     conversation.append(context_message)
-    conversation += recent_messages
+    conversation += filter_tool_messages(recent_messages)
 
     llm = get_llm(temperature=0.4)
 
