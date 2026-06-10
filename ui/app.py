@@ -70,6 +70,12 @@ if "uploader_key" not in st.session_state:
     st.session_state.uploader_key = 0
 if "show_uploader" not in st.session_state:
     st.session_state.show_uploader = False
+if "is_generating" not in st.session_state:
+    st.session_state.is_generating = False
+if "current_prompt" not in st.session_state:
+    st.session_state.current_prompt = None
+if "current_image_b64" not in st.session_state:
+    st.session_state.current_image_b64 = None
 
 
 # ── Helper Functions ─────────────────────────────────────────────────────
@@ -474,7 +480,7 @@ else:
         st.session_state.show_uploader = not st.session_state.show_uploader
         st.rerun()
 
-    prompt = st.chat_input("Ask me about your orders or our policies...")
+    prompt = st.chat_input("Ask me about your orders or our policies...", disabled=st.session_state.is_generating)
     
     # Check for shortcut trigger
     if getattr(st.session_state, 'shortcut', None):
@@ -561,47 +567,65 @@ else:
         width=0,
     )
     
-    if prompt:
-        actual_prompt = prompt
+    if prompt and not st.session_state.is_generating:
+        st.session_state.current_prompt = prompt
         
         image_b64 = None
         if uploaded_file:
             import base64
             image_b64 = base64.b64encode(uploaded_file.read()).decode("utf-8")
-            
-        # Add user message to history and display it
-        user_msg = {"role": "user", "content": actual_prompt}
+        st.session_state.current_image_b64 = image_b64
+        
+        # Add user message to history
+        user_msg = {"role": "user", "content": prompt}
         if image_b64:
             user_msg["image"] = image_b64
         st.session_state.messages.append(user_msg)
         
-        with st.chat_message("user"):
-            st.markdown(actual_prompt)
-            if uploaded_file:
-                st.image(uploaded_file, width=120)
+        st.session_state.is_generating = True
+        st.rerun()
 
+    # Generation Block
+    if st.session_state.is_generating:
+        actual_prompt = st.session_state.current_prompt
+        image_b64 = st.session_state.current_image_b64
+        
+        # We don't need to render the user message again because it's in st.session_state.messages and rendered above
+        
         # Get AI response
         with st.chat_message("assistant"):
-            with st.spinner("Thinking..."):
-                response_text = send_message(actual_prompt, image_b64)
+            col1, col2 = st.columns([5, 1])
+            with col2:
+                if st.button("🛑 Stop", key="stop_btn"):
+                    st.session_state.is_generating = False
+                    st.session_state.messages.append({"role": "assistant", "content": "⚠️ Generation stopped by user."})
+                    if uploaded_file:
+                        st.session_state.uploader_key += 1
+                        st.session_state.show_uploader = False
+                    st.rerun()
+            
+            with col1:
+                with st.spinner("Thinking..."):
+                    response_text = send_message(actual_prompt, image_b64)
 
-            if response_text:
-                reasoning, clean_text = parse_reasoning(response_text)
-                if reasoning:
-                    with st.expander("💭 Thinking Process"):
-                        st.markdown(reasoning)
-                st.markdown(clean_text, unsafe_allow_html=True)
-                st.session_state.messages.append(
-                    {"role": "assistant", "content": response_text}
-                )
-            else:
-                error_msg = "Something went wrong. Please try again."
-                st.error(error_msg)
-                st.session_state.messages.append(
-                    {"role": "assistant", "content": error_msg}
-                )
-                
+                if response_text:
+                    reasoning, clean_text = parse_reasoning(response_text)
+                    if reasoning:
+                        with st.expander("💭 Thinking Process"):
+                            st.markdown(reasoning)
+                    st.markdown(clean_text, unsafe_allow_html=True)
+                    st.session_state.messages.append(
+                        {"role": "assistant", "content": response_text}
+                    )
+                else:
+                    error_msg = "Something went wrong. Please try again."
+                    st.error(error_msg)
+                    st.session_state.messages.append(
+                        {"role": "assistant", "content": error_msg}
+                    )
+                    
+        st.session_state.is_generating = False
         if uploaded_file:
             st.session_state.uploader_key += 1
             st.session_state.show_uploader = False  # Hide it again after sending
-            st.rerun()
+        st.rerun()

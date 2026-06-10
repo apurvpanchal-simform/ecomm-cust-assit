@@ -21,8 +21,7 @@ MODEL_PRICING = {
     PRIMARY_MODEL: {"input": 0.59, "output": 0.59}, # Please update price for the actual primary model used
     FALLBACK_MODEL: {"input": 0.3, "output": 2.50},
     # Defaults as fallback
-    "llama-3.3-70b-versatile": {"input": 0.59, "output": 0.79},
-    "gemini-2.5-flash": {"input": 0.075, "output": 0.30},
+    "openai/gpt-oss-20b": {"input": 0.59, "output": 0.79},
     # Embedding Models (Free Tier Pricing)
     NOMIC_EMBEDDING_MODEL: {"input": 0.0, "output": 0.0}, # Free up to 10M tokens/month (otherwise $0.10/1M)
     GEMINI_EMBEDDING_MODEL: {"input": 0.0, "output": 0.0}, # Free of charge on Free Tier (otherwise $0.20/1M)
@@ -36,34 +35,7 @@ class TokenCostCallbackHandler(BaseCallbackHandler):
         self.log_file = log_file
         # Ensure the directory exists
         Path(self.log_file).parent.mkdir(parents=True, exist_ok=True)
-        self.cumulative_cost_usd = self._get_latest_cumulative_cost()
-
-    def _get_latest_cumulative_cost(self) -> float:
-        if not os.path.exists(self.log_file):
-            return 0.0
-        try:
-            with open(self.log_file, "r", encoding="utf-8") as f:
-                lines = f.readlines()
-                if not lines:
-                    return 0.0
-                
-                for line in reversed(lines):
-                    if line.strip():
-                        record = json.loads(line)
-                        if "cumulative_cost_usd" in record:
-                            return record["cumulative_cost_usd"]
-                        break
-                
-                # Fallback: calculate from all lines if no previous record has it
-                total = 0.0
-                for line in lines:
-                    if line.strip():
-                        record = json.loads(line)
-                        total += record.get("approx_cost_usd", 0.0)
-                return total
-        except Exception as e:
-            logger.error(f"Failed to read cumulative cost: {e}")
-            return 0.0
+        self.run_cost_usd = 0.0
 
     def on_llm_end(self, response: LLMResult, **kwargs: Any) -> None:
         """Called when LLM generation ends."""
@@ -85,7 +57,7 @@ class TokenCostCallbackHandler(BaseCallbackHandler):
                 cost = (input_tokens / 1_000_000) * pricing["input"] + \
                        (output_tokens / 1_000_000) * pricing["output"]
 
-            self.cumulative_cost_usd += cost
+            self.run_cost_usd += cost
 
             record = {
                 "timestamp": datetime.utcnow().isoformat() + "Z",
@@ -94,7 +66,6 @@ class TokenCostCallbackHandler(BaseCallbackHandler):
                 "output_tokens": output_tokens,
                 "total_tokens": total_tokens,
                 "approx_cost_usd": cost,
-                "cumulative_cost_usd": self.cumulative_cost_usd,
             }
 
             self._log_usage(record)
@@ -109,7 +80,7 @@ class TokenCostCallbackHandler(BaseCallbackHandler):
                 pricing = MODEL_PRICING[model_name]
                 cost = (input_tokens / 1_000_000) * pricing["input"]
 
-            self.cumulative_cost_usd += cost
+            self.run_cost_usd += cost
 
             record = {
                 "timestamp": datetime.utcnow().isoformat() + "Z",
@@ -118,7 +89,6 @@ class TokenCostCallbackHandler(BaseCallbackHandler):
                 "output_tokens": 0,
                 "total_tokens": input_tokens,
                 "approx_cost_usd": cost,
-                "cumulative_cost_usd": self.cumulative_cost_usd,
             }
 
             self._log_usage(record)
@@ -133,3 +103,16 @@ class TokenCostCallbackHandler(BaseCallbackHandler):
             
         # Also print to standard output so it shows up in Azure Container Logs
         logger.info(f"💰 Token Usage Tracked: {json.dumps(record)}")
+
+    def log_run_total(self, thread_id: str) -> None:
+        """Log the total cost for the current run."""
+        record = {
+            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "thread_id": thread_id,
+            "total_run_cost_usd": self.run_cost_usd,
+            "type": "run_summary"
+        }
+        with open(self.log_file, "a", encoding="utf-8") as f:
+            f.write(json.dumps(record) + "\n")
+            
+        logger.info(f"📊 [RUN COMPLETED] Thread {thread_id} | Total Cost: ${self.run_cost_usd:.4f}")

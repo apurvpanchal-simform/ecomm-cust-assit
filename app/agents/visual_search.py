@@ -1,23 +1,15 @@
 from typing import Any
-from pydantic import BaseModel, Field
 from app.db.qdrant import get_qdrant_client
-from qdrant_client.models import Filter, FieldCondition, Range
+from qdrant_client.models import Filter, FieldCondition, Range, Prefetch, FusionQuery, Fusion
 from app.services.llm import get_llm
 from app.services.clip_embedder import embed_text
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
 from langsmith import traceable
+from app.schemas.search import RerankedResult, RerankResponse
 import json
 import logging
 
 logger = logging.getLogger(__name__)
-
-class RerankedResult(BaseModel):
-    product_id: str = Field(description="The ID of the product")
-    relevance_score: float = Field(description="Score from 0.0 to 1.0 on how well it matches the user constraints")
-    reasoning: str = Field(description="Why it matches or fails")
-
-class RerankResponse(BaseModel):
-    results: list[RerankedResult]
 
 def build_filters(active_filters: dict | None):
     if not active_filters:
@@ -32,7 +24,7 @@ def build_filters(active_filters: dict | None):
 
 @traceable(name="visual_search_node")
 async def visual_search_node(state: Any) -> dict:
-    """Search Qdrant product_images collection with CLIP vector and hybrid LLM reranking."""
+    """Search Qdrant product_images collection using Hybrid Search (Dense + Sparse) with LLM reranking."""
     
     qdrant = get_qdrant_client()
     filters = build_filters(state.get("active_filters", {}))
@@ -40,49 +32,66 @@ async def visual_search_node(state: Any) -> dict:
     image_embedding = state.get("image_embedding")
     image_description = state.get("image_description") # OCR from image_analyzer
     
-    # 1. Determine primary vector
-    query_vector = None
-    if image_embedding and search_query:
+    # 1. Determine Vectors for Multi-Vector Hybrid Search
+    image_vector = image_embedding
+    text_vector = None
+    if search_query:
         try:
-            # MULTIMODAL HYBRID SEARCH: Combine Image + Text into a single vector!
-            # Since CLIP maps both text and images to the exact same dimensional space,
-            # we can literally average the vectors to search for both simultaneously.
             text_vector = embed_text(search_query)
-            
-            # Weight the image slightly higher (60% image, 40% text)
-            combined = [img * 0.6 + txt * 0.4 for img, txt in zip(image_embedding, text_vector)]
-            
-            # L2 Normalize the combined vector so Qdrant's Cosine similarity works correctly
-            norm = sum(v * v for v in combined) ** 0.5
-            query_vector = [v / norm for v in combined] if norm > 0 else combined
-            
-        except Exception as e:
-            logger.error(f"Failed to combine multimodal vectors: {e}")
-            query_vector = image_embedding # Fallback to image only
-            
-    elif image_embedding:
-        query_vector = image_embedding
-    elif search_query:
-        try:
-            query_vector = embed_text(search_query)
         except Exception as e:
             logger.error(f"Failed to embed text: {e}")
-
-    if not query_vector:
-        return {"visual_results": []}
 
     ranked_dict = {}
 
     try:
-        # Vector Search
-        response = await qdrant.query_points(
-            collection_name="product_images",
-            query=query_vector,
-            query_filter=filters,
-            limit=5,
-            score_threshold=0.35,
-            with_payload=True
-        )
+        # 2. Build Prefetch Queries for Dense-Dense Hybrid Search
+        prefetch_queries = []
+        
+        # Dense Image Prefetch
+        if image_vector:
+            prefetch_queries.append(
+                Prefetch(
+                    query=image_vector,
+                    using="",
+                    limit=20,
+                    filter=filters,
+                    score_threshold=0.20
+                )
+            )
+            
+        # Dense Text Prefetch
+        if text_vector:
+            prefetch_queries.append(
+                Prefetch(
+                    query=text_vector,
+                    using="",
+                    limit=20,
+                    filter=filters,
+                    score_threshold=0.20
+                )
+            )
+
+        if not prefetch_queries:
+            return {"visual_results": []}
+
+        # 3. Execute Qdrant Query
+        if len(prefetch_queries) == 1:
+            response = await qdrant.query_points(
+                collection_name="product_images",
+                query=prefetch_queries[0].query,
+                using=prefetch_queries[0].using,
+                query_filter=filters,
+                limit=5,
+                with_payload=True
+            )
+        else:
+            response = await qdrant.query_points(
+                collection_name="product_images",
+                prefetch=prefetch_queries,
+                query=FusionQuery(fusion=Fusion.RRF),
+                limit=5,
+                with_payload=True
+            )
         
         candidates = []
         for r in response.points:
@@ -91,6 +100,14 @@ async def visual_search_node(state: Any) -> dict:
             item = {**payload, "score": round(r.score, 4)}
             ranked_dict[pid] = item
             candidates.append(item)
+
+        log_msg = "\n========== RAW QDRANT RESULTS (PRE-RERANK) ==========\n"
+        if not candidates:
+            log_msg += "No results found.\n"
+        for idx, c in enumerate(candidates, 1):
+            log_msg += f"{idx}. ID: {c.get('product_id')} | Title: {c.get('title')} | Score: {c.get('score')}\n"
+        log_msg += "=======================================================\n"
+        logger.info(log_msg)
 
         # 2. LLM Reranking / Filtering (only if text constraints exist)
         if candidates and (search_query or image_description):

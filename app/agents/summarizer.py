@@ -50,6 +50,9 @@ async def summarizer_node(state: AgentState, config: RunnableConfig) -> dict:
             # Skip ToolMessages to avoid polluting the summary with raw tool outputs
             if msg_type == "tool":
                 continue
+            # Skip AIMessages that are pure tool-call invocations (no text)
+            if msg_type == "ai" and getattr(msg, "tool_calls", None):
+                continue
                 
             role = "User" if msg_type == "human" else "Assistant"
             content = msg.content

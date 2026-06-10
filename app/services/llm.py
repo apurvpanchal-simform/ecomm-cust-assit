@@ -2,7 +2,7 @@ import os
 import logging
 from langchain_groq import ChatGroq
 from langchain_openai import ChatOpenAI
-from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmbeddings
+from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from langchain_nomic.embeddings import NomicEmbeddings
 from app.services.token_tracker import TokenCostCallbackHandler
 
@@ -72,41 +72,41 @@ class FallbackEmbeddings:
             return res
 
 def get_llm(temperature=0.0):
-    """Returns OpenAI GPT-4o with Groq fallback."""
-    # Primary: OpenAI
-    openai_llm = ChatOpenAI(
-        model=os.getenv("PRIMARY_MODEL", "gpt-4o"),
-        base_url='https://api.chatanywhere.tech/v1', 
-        temperature=temperature,
-        max_retries=0
-    )
+    """Returns OpenAI model with Groq models as fallbacks."""
     
-    # Fallback 1/3: Groq 20b
+    primary_llm = ChatOpenAI(
+        model="gpt-4o-mini",
+        api_key=os.getenv('OPENAI_API_KEY'),
+        base_url=os.getenv('OPENAI_BASE_URL'),
+        temperature=temperature,
+        max_retries=2,
+        timeout=15.0
+    )
+
     groq_llm_1 = ChatGroq(
         model="openai/gpt-oss-20b",
         temperature=temperature,
-        max_retries=0
+        max_retries=2,
+        timeout=15.0
     )
     
-    # Fallback 2/4: Groq 120b
+    # Fallback 2: Groq 120b
     groq_llm_2 = ChatGroq(
         model="openai/gpt-oss-120b",
         temperature=temperature,
-        max_retries=0
+        max_retries=2,
+        timeout=15.0
     )
     
-    # LangChain fallback mechanism (cyclic chain)
-    return openai_llm.with_fallbacks([groq_llm_1, groq_llm_2, groq_llm_1, groq_llm_2])
+    # Queue: primary -> groq_llm_1 -> groq_llm_2
+    return primary_llm.with_fallbacks([groq_llm_1, groq_llm_2, primary_llm])
 
 def get_embeddings():
-    """Returns Nomic embeddings with Gemini fallback (both matched to 768 dims)."""
+    """Returns Nomic embeddings with Gemini fallback."""
     primary_name = os.getenv("NOMIC_EMBEDDING_MODEL", "nomic-embed-text-v1.5")
     fallback_name = os.getenv("EMBEDDING_MODEL", "models/gemini-embedding-2")
     
-    # Primary: Nomic (natively 768 dims)
     nomic_embeddings = NomicEmbeddings(model=primary_name)
-    
-    # Fallback: Gemini (explicitly configured to 768 dims to match Nomic)
     gemini_embeddings = GoogleGenerativeAIEmbeddings(
         model=fallback_name,
         output_dimensionality=768

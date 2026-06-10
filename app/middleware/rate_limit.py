@@ -12,16 +12,16 @@ async def rate_limit_customer(
         
     key = f"rate_limit:{customer_id}"
     
-    current = await redis_client.get(key)
-    if current and int(current) >= 10:
+    async with redis_client.pipeline(transaction=True) as pipe:
+        pipe.incr(key)
+        pipe.expire(key, 60, nx=True)
+        results = await pipe.execute()
+        
+    current_count = results[0]
+    if current_count > 10:
         raise HTTPException(
             status_code=429, 
             detail="Too Many Requests. Please wait a minute before trying again."
         )
-        
-    async with redis_client.pipeline(transaction=True) as pipe:
-        pipe.incr(key)
-        pipe.expire(key, 60, nx=True)
-        await pipe.execute()
         
     return customer_id

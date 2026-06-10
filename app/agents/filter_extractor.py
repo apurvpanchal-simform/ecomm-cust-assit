@@ -1,11 +1,12 @@
 from typing import Optional
-from pydantic import BaseModel, Field
 from langsmith import traceable
 from langchain_core.messages import SystemMessage
 from langchain_core.runnables import RunnableConfig
 
 from app.services.llm import get_llm
 from app.graph.state import AgentState
+from app.graph.utils import filter_tool_messages
+from app.schemas.search import SearchConstraints
 import logging
 
 logger = logging.getLogger(__name__)
@@ -21,11 +22,6 @@ Rules:
 5. Do NOT include price terms in the `search_query` itself (e.g. "red shoes" instead of "red shoes under 50").
 6. CRITICAL: If you receive a "specific task for this turn", you MUST prioritize that task and ignore unrelated parts of the user's broader conversation.
 """
-
-class SearchConstraints(BaseModel):
-    search_query: str = Field(description="A clean, optimized search phrase for text-based product matching.")
-    min_price: Optional[float] = Field(default=None, description="Minimum price if specified.")
-    max_price: Optional[float] = Field(default=None, description="Maximum price if specified.")
 
 @traceable(name="filter_extractor_node")
 async def filter_extractor_node(state: AgentState, config: RunnableConfig) -> dict:
@@ -53,9 +49,10 @@ async def filter_extractor_node(state: AgentState, config: RunnableConfig) -> di
     if sub_query:
         messages_to_send.append(SystemMessage(content=f"Your specific task for this turn: {sub_query}"))
     
-    if recent_messages:
+    filtered_messages = filter_tool_messages(recent_messages)
+    if filtered_messages:
         messages_to_send.append(SystemMessage(content="Latest Conversation (Highest priority):"))
-    for msg in recent_messages:
+    for msg in filtered_messages:
         messages_to_send.append(msg)
         
     try:

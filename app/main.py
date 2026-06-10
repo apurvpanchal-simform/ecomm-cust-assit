@@ -180,11 +180,12 @@ async def chat(
         f"thread_id={thread_id}"
     )
 
+    tracker = TokenCostCallbackHandler()
     config = {
         "configurable": {
             "thread_id": thread_id
         },
-        "callbacks": [TokenCostCallbackHandler()]
+        "callbacks": [tracker]
     }
 
     # Enforce conversation length limit
@@ -204,6 +205,8 @@ async def chat(
         "executed_agents": [],
     }
 
+    import json
+    
     logger.info("--- GRAPH EXECUTION START ---")
     async def consume_graph():
         async for event in request.app.state.graph.astream(
@@ -211,18 +214,41 @@ async def chat(
             config=config,
             stream_mode="updates",
         ):
-            for node_name in event.keys():
-                logger.info(f"Finished node: {node_name}")
+            for node_name, state_update in event.items():
+                logger.info(f"--- [NODE INVOKED]: {node_name} ---")
                 
-    try:
-        await asyncio.wait_for(consume_graph(), timeout=45.0)
-    except asyncio.TimeoutError:
-        logger.error("Graph execution timed out after 45 seconds.")
-        raise HTTPException(status_code=504, detail="Request to the agent timed out. Please try again.")
-    logger.info("--- GRAPH EXECUTION END ---")
+                if state_update is not None:
+                    if "messages" in state_update:
+                        msgs = state_update["messages"]
+                        if not isinstance(msgs, list):
+                            msgs = [msgs]
+                        for msg in msgs:
+                            if getattr(msg, "tool_calls", None):
+                                logger.info(f"🛠️ [TOOL CALLS]: {msg.tool_calls}")
+                            if getattr(msg, "content", None):
+                                logger.info(f"💬 [MESSAGE CONTENT]: {msg.content}")
 
+                    safe_update = {k: v for k, v in state_update.items() if k not in ["messages", "image_base64", "image_embedding"]}
+                    if safe_update:
+                        try:
+                            logger.info(f"🔄 [STATE UPDATE]: {json.dumps(safe_update, default=str)}")
+                        except Exception:
+                            logger.info(f"🔄 [STATE UPDATE]: {safe_update}")
+                        
+    try:
+        await asyncio.wait_for(consume_graph(), timeout=90.0)
+    except asyncio.TimeoutError:
+        logger.error("Graph execution timed out after 90 seconds.")
+        raise HTTPException(status_code=504, detail="Request to the agent timed out. Please try again.")
+    
     final_state = await request.app.state.graph.aget_state(config)
+    logger.info("--- GRAPH EXECUTION END ---")
+    
+    tracker.log_run_total(thread_id=thread_id)
+    
     result = final_state.values
+    safe_result = {k: v for k, v in result.items() if k not in ["messages", "image_base64", "image_embedding"]}
+    logger.info(f"🏁 [FINAL AGENT STATE]: {json.dumps(safe_result, default=str)}")
 
     return result
 

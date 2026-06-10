@@ -27,3 +27,4 @@ venv/
 
 # Data
 *.jsonl
+*.log
