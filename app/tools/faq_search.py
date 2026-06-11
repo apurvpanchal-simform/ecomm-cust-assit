@@ -40,4 +40,3 @@ async def search_faq(query: str) -> str:
         for chunk in confident_chunks
     )
     return context
-

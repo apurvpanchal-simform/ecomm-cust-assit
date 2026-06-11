@@ -1,27 +1,27 @@
 from fastapi import Depends, Request, HTTPException
 from app.middleware.auth import get_current_customer
 
+
 async def rate_limit_customer(
-    request: Request,
-    customer_id: str = Depends(get_current_customer)
+    request: Request, customer_id: str = Depends(get_current_customer)
 ) -> str:
     """Rate limit to 10 requests per minute per customer."""
     redis_client = getattr(request.app.state, "redis", None)
     if not redis_client:
         return customer_id
-        
+
     key = f"rate_limit:{customer_id}"
-    
+
     async with redis_client.pipeline(transaction=True) as pipe:
         pipe.incr(key)
         pipe.expire(key, 60, nx=True)
         results = await pipe.execute()
-        
+
     current_count = results[0]
     if current_count > 10:
         raise HTTPException(
-            status_code=429, 
-            detail="Too Many Requests. Please wait a minute before trying again."
+            status_code=429,
+            detail="Too Many Requests. Please wait a minute before trying again.",
         )
-        
+
     return customer_id

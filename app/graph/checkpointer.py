@@ -1,23 +1,27 @@
 from typing import Optional, Any, AsyncIterator, Dict, Sequence, Tuple
 from langchain_core.runnables import RunnableConfig
 from langgraph.checkpoint.base import (
-    BaseCheckpointSaver, 
-    Checkpoint, 
-    CheckpointMetadata, 
-    CheckpointTuple, 
-    ChannelVersions
+    BaseCheckpointSaver,
+    Checkpoint,
+    CheckpointMetadata,
+    CheckpointTuple,
+    ChannelVersions,
 )
 
 import logging
 
 logger = logging.getLogger(__name__)
 
+
 class AsyncDualCheckpointer(BaseCheckpointSaver):
     """
     An async LangGraph checkpointer that writes to both Redis and Postgres (Supabase).
     Reads prioritize Redis for speed, falling back to Postgres if a cache miss occurs.
     """
-    def __init__(self, redis_saver: BaseCheckpointSaver, postgres_saver: BaseCheckpointSaver):
+
+    def __init__(
+        self, redis_saver: BaseCheckpointSaver, postgres_saver: BaseCheckpointSaver
+    ):
         super().__init__()
         self.redis_saver = redis_saver
         self.postgres_saver = postgres_saver
@@ -26,15 +30,13 @@ class AsyncDualCheckpointer(BaseCheckpointSaver):
         """Scans and expires all LangGraph checkpoint keys associated with a thread."""
         if not thread_id or not hasattr(self.redis_saver, "_redis"):
             return
-            
+
         try:
             redis_client = self.redis_saver._redis
             cursor = 0
             while True:
                 cursor, keys = await redis_client.scan(
-                    cursor=cursor, 
-                    match=f"checkpoint*{thread_id}*", 
-                    count=100
+                    cursor=cursor, match=f"checkpoint*{thread_id}*", count=100
                 )
                 if keys:
                     async with redis_client.pipeline(transaction=False) as pipe:
@@ -51,10 +53,7 @@ class AsyncDualCheckpointer(BaseCheckpointSaver):
         config: RunnableConfig,
     ) -> Optional[CheckpointTuple]:
 
-        thread_id = (
-            config.get("configurable", {})
-            .get("thread_id")
-        )
+        thread_id = config.get("configurable", {}).get("thread_id")
 
         logger.debug(f"THREAD_ID={thread_id}")
 
@@ -73,12 +72,9 @@ class AsyncDualCheckpointer(BaseCheckpointSaver):
             try:
                 # WARM REDIS CACHE: Write the tuple back to Redis so subsequent reads hit the cache
                 await self.redis_saver.aput(
-                    tuple_.config,
-                    tuple_.checkpoint,
-                    tuple_.metadata,
-                    {}
+                    tuple_.config, tuple_.checkpoint, tuple_.metadata, {}
                 )
-                
+
                 # Set TTL on all restored keys
                 thread_id = tuple_.config.get("configurable", {}).get("thread_id")
                 await self._expire_thread_keys(thread_id)
@@ -98,7 +94,9 @@ class AsyncDualCheckpointer(BaseCheckpointSaver):
         limit: Optional[int] = None,
     ) -> AsyncIterator[CheckpointTuple]:
         # Read history from Postgres since it's our durable long-term storage
-        async for item in self.postgres_saver.alist(config, filter=filter, before=before, limit=limit):
+        async for item in self.postgres_saver.alist(
+            config, filter=filter, before=before, limit=limit
+        ):
             yield item
 
     async def aput(
@@ -112,12 +110,12 @@ class AsyncDualCheckpointer(BaseCheckpointSaver):
         await self.postgres_saver.aput(config, checkpoint, metadata, new_versions)
         # Write the latest checkpoint to Redis (hot cache).
         res = await self.redis_saver.aput(config, checkpoint, metadata, new_versions)
-        
+
         # Prune old checkpoints from Redis — keep only the latest one.
         # We apply a 1-hour TTL to ALL LangGraph keys associated with this thread.
         thread_id = config.get("configurable", {}).get("thread_id")
         await self._expire_thread_keys(thread_id)
-            
+
         return res
 
     async def aput_writes(

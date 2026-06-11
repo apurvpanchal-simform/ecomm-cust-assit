@@ -7,6 +7,7 @@ load_dotenv()
 
 _supabase_async: AsyncClient = None
 
+
 async def get_supabase_client() -> AsyncClient:
     global _supabase_async
     if _supabase_async is None:

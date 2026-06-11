@@ -93,12 +93,14 @@ def login(email: str) -> bool:
             data = resp.json()
             st.session_state.jwt_token = data["access_token"]
             st.session_state.user_email = email
-            
+
             # Load conversations, if any exist pick the most recent, else make new
             convs = fetch_conversations()
             if convs:
                 st.session_state.conversation_id = convs[0]["conversation_id"]
-                st.session_state.messages = fetch_history(st.session_state.conversation_id)
+                st.session_state.messages = fetch_history(
+                    st.session_state.conversation_id
+                )
             else:
                 st.session_state.conversation_id = str(uuid.uuid4())
             return True
@@ -115,7 +117,7 @@ def send_message(query: str, image_b64: str = None) -> str | None:
 
     headers = {"Authorization": f"Bearer {st.session_state.jwt_token}"}
     payload = {"query": query}
-    
+
     if image_b64:
         payload["image_base64"] = image_b64
 
@@ -177,21 +179,25 @@ def extract_response_text(data: dict) -> str:
 def parse_reasoning(content: str) -> tuple[str | None, str]:
     """Extracts reasoning (inside <think> tags) and the clean response content."""
     import re
+
     match = re.search(r"<think>(.*?)</think>", content, re.DOTALL)
     if match:
         reasoning = match.group(1).strip()
-        clean_content = re.sub(r"<think>.*?</think>", "", content, flags=re.DOTALL).strip()
+        clean_content = re.sub(
+            r"<think>.*?</think>", "", content, flags=re.DOTALL
+        ).strip()
         return reasoning, clean_content
     return None, content
 
 
 def fetch_conversations():
-    if not st.session_state.jwt_token: return []
+    if not st.session_state.jwt_token:
+        return []
     try:
         resp = requests.get(
             f"{API_BASE_URL}/chat/conversations",
             headers={"Authorization": f"Bearer {st.session_state.jwt_token}"},
-            timeout=10
+            timeout=10,
         )
         if resp.status_code == 200:
             return resp.json()
@@ -199,13 +205,15 @@ def fetch_conversations():
         pass
     return []
 
+
 def fetch_history(conversation_id):
-    if not st.session_state.jwt_token: return []
+    if not st.session_state.jwt_token:
+        return []
     try:
         resp = requests.get(
             f"{API_BASE_URL}/chat/history/{conversation_id}",
             headers={"Authorization": f"Bearer {st.session_state.jwt_token}"},
-            timeout=10
+            timeout=10,
         )
         if resp.status_code == 200:
             return resp.json().get("messages", [])
@@ -213,13 +221,15 @@ def fetch_history(conversation_id):
         pass
     return []
 
+
 def delete_conversation(conversation_id):
-    if not st.session_state.jwt_token: return False
+    if not st.session_state.jwt_token:
+        return False
     try:
         resp = requests.delete(
             f"{API_BASE_URL}/chat/conversations/{conversation_id}",
             headers={"Authorization": f"Bearer {st.session_state.jwt_token}"},
-            timeout=10
+            timeout=10,
         )
         return resp.status_code == 200
     except Exception:
@@ -228,79 +238,99 @@ def delete_conversation(conversation_id):
 
 @st.dialog("📦 Your Order History", width="large")
 def show_orders_dialog():
-    if not st.session_state.jwt_token: return
+    if not st.session_state.jwt_token:
+        return
     try:
         with st.spinner("Fetching your orders..."):
             resp = requests.get(
                 f"{API_BASE_URL}/orders",
                 headers={"Authorization": f"Bearer {st.session_state.jwt_token}"},
-                timeout=10
+                timeout=10,
             )
         if resp.status_code == 200:
             orders = resp.json()
             if not orders:
                 st.info("You don't have any orders yet.")
                 return
-                
+
             for order in orders:
-                status_emoji = "✅" if order["status"] == "delivered" else "🚚" if order["status"] == "shipped" else "⏳"
-                with st.expander(f"{status_emoji} Order **{order['id']}** - ${order['total']} ({order['status'].title()})"):
+                status_emoji = (
+                    "✅"
+                    if order["status"] == "delivered"
+                    else "🚚" if order["status"] == "shipped" else "⏳"
+                )
+                with st.expander(
+                    f"{status_emoji} Order **{order['id']}** - ${order['total']} ({order['status'].title()})"
+                ):
                     st.write(f"**Ordered:** {order['ordered_at'][:10]}")
                     if order.get("delivered_at"):
                         st.write(f"**Delivered:** {order['delivered_at'][:10]}")
                     elif order.get("estimated_delivery"):
-                        st.write(f"**Estimated Delivery:** {order['estimated_delivery'][:10]}")
-                    
+                        st.write(
+                            f"**Estimated Delivery:** {order['estimated_delivery'][:10]}"
+                        )
+
                     st.write(f"**Carrier:** {order.get('carrier', 'N/A')}")
-                    
-                    if order.get('return_eligible') is not None:
-                        return_text = f"Yes (Until {order.get('return_deadline', 'N/A')[:10]})" if order.get('return_eligible') else "No"
+
+                    if order.get("return_eligible") is not None:
+                        return_text = (
+                            f"Yes (Until {order.get('return_deadline', 'N/A')[:10]})"
+                            if order.get("return_eligible")
+                            else "No"
+                        )
                         st.write(f"**Return Eligible:** {return_text}")
-                    
+
                     st.markdown("#### Items")
                     for item in order.get("items", []):
-                        item_name = item.get('name', f"Product {item.get('product_id', 'Unknown')}")
+                        item_name = item.get(
+                            "name", f"Product {item.get('product_id', 'Unknown')}"
+                        )
                         details = []
                         if item.get("color"):
                             details.append(f"Color: {item['color']}")
                         if item.get("size"):
                             details.append(f"Size: {item['size']}")
-                        
+
                         detail_str = f" ({', '.join(details)})" if details else ""
-                        
+
                         col1, col2 = st.columns([1, 6])
                         with col1:
                             if item.get("image"):
                                 st.image(item["image"], width=50)
                         with col2:
-                            st.markdown(f"**{item_name}**{detail_str} (x{item.get('quantity', 1)})<br>${item.get('price', 0)}", unsafe_allow_html=True)
+                            st.markdown(
+                                f"**{item_name}**{detail_str} (x{item.get('quantity', 1)})<br>${item.get('price', 0)}",
+                                unsafe_allow_html=True,
+                            )
         else:
             st.error("Failed to load orders. Please try again.")
     except Exception as e:
         st.error(f"Error connecting to server: {e}")
 
+
 @st.dialog("🛍️ Product Catalog", width="large")
 def show_products_dialog():
-    if not st.session_state.jwt_token: return
+    if not st.session_state.jwt_token:
+        return
     try:
         with st.spinner("Fetching products..."):
             resp = requests.get(
                 f"{API_BASE_URL}/products",
                 headers={"Authorization": f"Bearer {st.session_state.jwt_token}"},
-                timeout=10
+                timeout=10,
             )
         if resp.status_code == 200:
             products = resp.json()
             if not products:
                 st.info("No products available.")
                 return
-                
+
             for product in products:
                 with st.expander(f"**{product['title']}** - ${product['price']}"):
                     col1, col2 = st.columns([1, 3])
                     with col1:
-                        if product.get('image'):
-                            st.image(product['image'], width=100)
+                        if product.get("image"):
+                            st.image(product["image"], width=100)
                     with col2:
                         st.write(f"**Category:** {product.get('category', 'N/A')}")
                         st.write(f"{product.get('description', '')}")
@@ -308,6 +338,7 @@ def show_products_dialog():
             st.error("Failed to load products. Please try again.")
     except Exception as e:
         st.error(f"Error connecting to server: {e}")
+
 
 def logout():
     """Clear session state and log the user out."""
@@ -329,8 +360,6 @@ with st.sidebar:
             logout()
             st.rerun()
 
-
-
         st.divider()
         st.markdown("### 💬 Recent Chats")
 
@@ -344,18 +373,32 @@ with st.sidebar:
         for conv in conversations:
             title = conv.get("title", "Chat")
             conv_id = conv.get("conversation_id")
-            
-            btn_type = "primary" if conv_id == st.session_state.conversation_id else "secondary"
-            
+
+            btn_type = (
+                "primary"
+                if conv_id == st.session_state.conversation_id
+                else "secondary"
+            )
+
             col1, col2 = st.columns([5, 1])
             with col1:
-                if st.button(f"📄 {title}", key=f"btn_{conv_id}", type=btn_type, use_container_width=True):
+                if st.button(
+                    f"📄 {title}",
+                    key=f"btn_{conv_id}",
+                    type=btn_type,
+                    use_container_width=True,
+                ):
                     st.session_state.conversation_id = conv_id
                     st.session_state.messages = fetch_history(conv_id)
                     st.session_state.uploader_key += 1
                     st.rerun()
             with col2:
-                if st.button("🗑️", key=f"del_{conv_id}", help="Delete chat", use_container_width=True):
+                if st.button(
+                    "🗑️",
+                    key=f"del_{conv_id}",
+                    help="Delete chat",
+                    use_container_width=True,
+                ):
                     if delete_conversation(conv_id):
                         if st.session_state.conversation_id == conv_id:
                             st.session_state.conversation_id = str(uuid.uuid4())
@@ -364,7 +407,7 @@ with st.sidebar:
 
         st.divider()
         st.markdown("### 🚀 Shortcuts")
-        
+
         if st.button("📦 Show My Orders", use_container_width=True):
             show_orders_dialog()
 
@@ -399,8 +442,7 @@ with st.sidebar:
 st.title("🛒 Customer Support Chat")
 
 if not st.session_state.jwt_token:
-    st.markdown(
-        """
+    st.markdown("""
         Welcome to the **E-Commerce Customer Support Assistant**!
 
         I can help you with:
@@ -408,8 +450,7 @@ if not st.session_state.jwt_token:
         - ❓ **FAQs** — return policies, shipping info, company details
 
         👈 **Please log in from the sidebar to get started.**
-        """
-    )
+        """)
 else:
     # Display existing chat history
     if not st.session_state.messages:
@@ -435,6 +476,7 @@ else:
                     st.markdown(message["content"], unsafe_allow_html=True)
                     if message.get("image"):
                         import base64
+
                         st.image(base64.b64decode(message["image"]), width=120)
 
         # 1. Anchor and floating scroll-to-bottom button
@@ -457,7 +499,7 @@ else:
                 </a>
             </div>
             """,
-            unsafe_allow_html=True
+            unsafe_allow_html=True,
         )
 
     # 1. Render file uploader above if toggled
@@ -466,24 +508,21 @@ else:
         uploaded_file = st.file_uploader(
             "Upload an image:",
             type=["png", "jpg", "jpeg"],
-            key=f"uploader_{st.session_state.uploader_key}"
+            key=f"uploader_{st.session_state.uploader_key}",
         )
-        if uploaded_file:
-            col1, col2 = st.columns([3, 1])
-            with col2:
-                if st.button("📤 Send Image without Text", use_container_width=True):
-                    st.session_state.shortcut = "Can you find products similar to this image?"
-                    st.rerun()
 
     # 2. Chat input and toggle button side-by-side (button on right, vertically centered)
     if st.button("➕", key="toggle_uploader"):
         st.session_state.show_uploader = not st.session_state.show_uploader
         st.rerun()
 
-    prompt = st.chat_input("Ask me about your orders or our policies...", disabled=st.session_state.is_generating)
-    
+    prompt = st.chat_input(
+        "Ask me about your orders or our policies...",
+        disabled=st.session_state.is_generating,
+    )
+
     # Check for shortcut trigger
-    if getattr(st.session_state, 'shortcut', None):
+    if getattr(st.session_state, "shortcut", None):
         prompt = st.session_state.shortcut
         st.session_state.shortcut = None
 
@@ -566,22 +605,23 @@ else:
         height=0,
         width=0,
     )
-    
+
     if prompt and not st.session_state.is_generating:
         st.session_state.current_prompt = prompt
-        
+
         image_b64 = None
         if uploaded_file:
             import base64
+
             image_b64 = base64.b64encode(uploaded_file.read()).decode("utf-8")
         st.session_state.current_image_b64 = image_b64
-        
+
         # Add user message to history
         user_msg = {"role": "user", "content": prompt}
         if image_b64:
             user_msg["image"] = image_b64
         st.session_state.messages.append(user_msg)
-        
+
         st.session_state.is_generating = True
         st.rerun()
 
@@ -589,21 +629,26 @@ else:
     if st.session_state.is_generating:
         actual_prompt = st.session_state.current_prompt
         image_b64 = st.session_state.current_image_b64
-        
+
         # We don't need to render the user message again because it's in st.session_state.messages and rendered above
-        
+
         # Get AI response
         with st.chat_message("assistant"):
             col1, col2 = st.columns([5, 1])
             with col2:
                 if st.button("🛑 Stop", key="stop_btn"):
                     st.session_state.is_generating = False
-                    st.session_state.messages.append({"role": "assistant", "content": "⚠️ Generation stopped by user."})
+                    st.session_state.messages.append(
+                        {
+                            "role": "assistant",
+                            "content": "⚠️ Generation stopped by user.",
+                        }
+                    )
                     if uploaded_file:
                         st.session_state.uploader_key += 1
                         st.session_state.show_uploader = False
                     st.rerun()
-            
+
             with col1:
                 with st.spinner("Thinking..."):
                     response_text = send_message(actual_prompt, image_b64)
@@ -623,7 +668,7 @@ else:
                     st.session_state.messages.append(
                         {"role": "assistant", "content": error_msg}
                     )
-                    
+
         st.session_state.is_generating = False
         if uploaded_file:
             st.session_state.uploader_key += 1

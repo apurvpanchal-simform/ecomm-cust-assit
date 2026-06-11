@@ -1,6 +1,7 @@
 from typing import Any
 from langsmith import traceable
 
+
 @traceable(name="cleanup_node")
 async def cleanup_node(state: Any) -> dict:
     """Lightweight node that clears heavy transient fields to keep checkpoints lean.
