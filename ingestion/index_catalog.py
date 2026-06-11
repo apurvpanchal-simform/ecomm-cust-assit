@@ -2,6 +2,7 @@
 Run once to index all product images into Qdrant.
 Usage: python ingestion/index_catalog.py
 """
+
 import requests
 from qdrant_client.models import PointStruct
 import asyncio
@@ -16,6 +17,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from app.db.qdrant import get_qdrant_client, ensure_product_images_collection
 from app.services.clip_embedder import embed_image_bytes
 from app.services.sparse_embedder import embed_sparse_text
+
 # from app.services.azure_vision import vectorize_image_bytes
 from app.services.azure_blob import upload_product_image
 from supabase import create_client
@@ -25,16 +27,19 @@ load_dotenv(override=True)
 supabase = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_KEY"])
 qdrant = get_qdrant_client()
 
+
 async def index_all_products():
     # Recreate collection to match the new 1152 dimensions of SigLIP2
     await ensure_product_images_collection(recreate=True)
-    
+
     # Fetch all products from Supabase
     products = supabase.table("products").select("*").execute().data
     points = []
 
     if not products:
-        print("No products found in Supabase. Please populate the products table first.")
+        print(
+            "No products found in Supabase. Please populate the products table first."
+        )
         return
 
     for product in products:
@@ -57,24 +62,25 @@ async def index_all_products():
             text_to_embed = f"{product.get('title', '')} {product.get('category', '')} {product.get('description', '')}"
             sparse_vector = embed_sparse_text(text_to_embed)
 
-            points.append(PointStruct(
-                id=product["id"],
-                vector={
-                    "": dense_vector,
-                    "text": sparse_vector
-                },
-                payload={
-                    "product_id": product["id"],
-                    "title":       product["title"],
-                    "price":       float(product["price"]),
-                    "image_url":   azure_url,
-                    "category":    product.get("category", ""),
-                    "description": product.get("description", "")
-                }
-            ))
+            points.append(
+                PointStruct(
+                    id=product["id"],
+                    vector={"": dense_vector, "text": sparse_vector},
+                    payload={
+                        "product_id": product["id"],
+                        "title": product["title"],
+                        "price": float(product["price"]),
+                        "image_url": azure_url,
+                        "category": product.get("category", ""),
+                        "description": product.get("description", ""),
+                    },
+                )
+            )
 
             # Update image_url in Supabase
-            supabase.table("products").update({"azure_image_url": azure_url}).eq("id", product["id"]).execute()
+            supabase.table("products").update({"azure_image_url": azure_url}).eq(
+                "id", product["id"]
+            ).execute()
 
         except Exception as e:
             print(f"❌ Failed {product['id']}: {e}")
@@ -82,10 +88,13 @@ async def index_all_products():
     # Batch upsert into Qdrant (100 at a time)
     if points:
         for i in range(0, len(points), 100):
-            await qdrant.upsert(collection_name="product_images", points=points[i:i+100])
+            await qdrant.upsert(
+                collection_name="product_images", points=points[i : i + 100]
+            )
             print(f"✅ Indexed {min(i+100, len(points))}/{len(points)}")
     else:
         print("No points to index.")
+
 
 if __name__ == "__main__":
     asyncio.run(index_all_products())

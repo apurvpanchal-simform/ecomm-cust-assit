@@ -58,14 +58,10 @@ async def lifespan(app: FastAPI):
     supabase_db_url = os.getenv("SUPABASE_DB_URL")
 
     if not redis_url:
-        raise RuntimeError(
-            "REDIS_URL environment variable is missing"
-        )
+        raise RuntimeError("REDIS_URL environment variable is missing")
 
     if not supabase_db_url:
-        raise RuntimeError(
-            "SUPABASE_DB_URL environment variable is missing"
-        )
+        raise RuntimeError("SUPABASE_DB_URL environment variable is missing")
 
     try:
 
@@ -86,14 +82,12 @@ async def lifespan(app: FastAPI):
             await postgres_saver.setup()
 
             # The customer_conversations table is managed in app/db/schema.sql
-            
+
             app.state.pool = pool
             app.state.redis = redis_client
 
             logger.info("Initializing AsyncRedisSaver...")
-            redis_saver = AsyncRedisSaver(
-                redis_client=redis_client
-            )
+            redis_saver = AsyncRedisSaver(redis_client=redis_client)
             await redis_saver.asetup()
 
             dual_checkpointer = AsyncDualCheckpointer(
@@ -101,22 +95,21 @@ async def lifespan(app: FastAPI):
                 postgres_saver=postgres_saver,
             )
 
-            app.state.graph = compile_graph(
-                checkpointer=dual_checkpointer
-            )
+            app.state.graph = compile_graph(checkpointer=dual_checkpointer)
 
-            logger.info("Graph compiled successfully with Redis + Postgres async checkpointing.")
+            logger.info(
+                "Graph compiled successfully with Redis + Postgres async checkpointing."
+            )
 
             yield
 
     except Exception:
-        logger.exception(
-            "Failed to initialize graph infrastructure."
-        )
+        logger.exception("Failed to initialize graph infrastructure.")
         raise
 
 
 app = FastAPI(lifespan=lifespan)
+
 
 @app.get("/health")
 async def health_check():
@@ -133,9 +126,7 @@ async def login(
 
     customer_service = CustomerService()
 
-    customer = customer_service.get_customer_by_email(
-        request.email
-    )
+    customer = customer_service.get_customer_by_email(request.email)
 
     if not customer:
         raise HTTPException(
@@ -148,52 +139,41 @@ async def login(
         email=customer["email"],
     )
 
-    return LoginResponse(
-        access_token=token
-    )
+    return LoginResponse(access_token=token)
 
 
 @app.post("/chat")
 async def chat(
     request: Request,
     chat_request: ChatRequest,
-    customer_id: str = Depends(
-        rate_limit_customer
-    ),
+    customer_id: str = Depends(rate_limit_customer),
 ):
 
-    thread_id = (
-        chat_request.conversation_id
-        or customer_id
-    )
+    thread_id = chat_request.conversation_id or customer_id
 
     async with request.app.state.pool.connection() as conn:
-        await conn.execute("""
+        await conn.execute(
+            """
             INSERT INTO customer_conversations (conversation_id, customer_id, title)
             VALUES (%s, %s, %s)
             ON CONFLICT (conversation_id) DO UPDATE SET updated_at = NOW()
-        """, (thread_id, customer_id, chat_request.query[:30] + "..."))
+        """,
+            (thread_id, customer_id, chat_request.query[:30] + "..."),
+        )
 
     logger.info(
-        f"Invoking graph | "
-        f"customer_id={customer_id} | "
-        f"thread_id={thread_id}"
+        f"Invoking graph | " f"customer_id={customer_id} | " f"thread_id={thread_id}"
     )
 
     tracker = TokenCostCallbackHandler()
-    config = {
-        "configurable": {
-            "thread_id": thread_id
-        },
-        "callbacks": [tracker]
-    }
+    config = {"configurable": {"thread_id": thread_id}, "callbacks": [tracker]}
 
     # Enforce conversation length limit
     current_state = await request.app.state.graph.aget_state(config)
     if len(current_state.values.get("messages", [])) > 100:
         raise HTTPException(
             status_code=400,
-            detail="Conversation has reached its maximum length. Please start a new chat."
+            detail="Conversation has reached its maximum length. Please start a new chat.",
         )
 
     state_input = {
@@ -206,8 +186,9 @@ async def chat(
     }
 
     import json
-    
+
     logger.info("--- GRAPH EXECUTION START ---")
+
     async def consume_graph():
         async for event in request.app.state.graph.astream(
             state_input,
@@ -216,7 +197,7 @@ async def chat(
         ):
             for node_name, state_update in event.items():
                 logger.info(f"--- [NODE INVOKED]: {node_name} ---")
-                
+
                 if state_update is not None:
                     if "messages" in state_update:
                         msgs = state_update["messages"]
@@ -228,26 +209,38 @@ async def chat(
                             if getattr(msg, "content", None):
                                 logger.info(f"💬 [MESSAGE CONTENT]: {msg.content}")
 
-                    safe_update = {k: v for k, v in state_update.items() if k not in ["messages", "image_base64", "image_embedding"]}
+                    safe_update = {
+                        k: v
+                        for k, v in state_update.items()
+                        if k not in ["messages", "image_base64", "image_embedding"]
+                    }
                     if safe_update:
                         try:
-                            logger.info(f"🔄 [STATE UPDATE]: {json.dumps(safe_update, default=str)}")
+                            logger.info(
+                                f"🔄 [STATE UPDATE]: {json.dumps(safe_update, default=str)}"
+                            )
                         except Exception:
                             logger.info(f"🔄 [STATE UPDATE]: {safe_update}")
-                        
+
     try:
         await asyncio.wait_for(consume_graph(), timeout=90.0)
     except asyncio.TimeoutError:
         logger.error("Graph execution timed out after 90 seconds.")
-        raise HTTPException(status_code=504, detail="Request to the agent timed out. Please try again.")
-    
+        raise HTTPException(
+            status_code=504, detail="Request to the agent timed out. Please try again."
+        )
+
     final_state = await request.app.state.graph.aget_state(config)
     logger.info("--- GRAPH EXECUTION END ---")
-    
+
     tracker.log_run_total(thread_id=thread_id)
-    
+
     result = final_state.values
-    safe_result = {k: v for k, v in result.items() if k not in ["messages", "image_base64", "image_embedding"]}
+    safe_result = {
+        k: v
+        for k, v in result.items()
+        if k not in ["messages", "image_base64", "image_embedding"]
+    }
     logger.info(f"🏁 [FINAL AGENT STATE]: {json.dumps(safe_result, default=str)}")
 
     return result
@@ -259,14 +252,17 @@ async def list_conversations(
     customer_id: str = Depends(get_current_customer),
 ):
     async with request.app.state.pool.connection() as conn:
-        cursor = await conn.execute("""
+        cursor = await conn.execute(
+            """
             SELECT conversation_id, title, updated_at 
             FROM customer_conversations 
             WHERE customer_id = %s 
             ORDER BY updated_at DESC
-        """, (customer_id,))
+        """,
+            (customer_id,),
+        )
         result = await cursor.fetchall()
-        
+
         return [ConversationItem(**row) for row in result]
 
 
@@ -279,7 +275,7 @@ async def get_chat_history(
     async with request.app.state.pool.connection() as conn:
         cursor = await conn.execute(
             "SELECT 1 FROM customer_conversations WHERE conversation_id = %s AND customer_id = %s",
-            (conversation_id, customer_id)
+            (conversation_id, customer_id),
         )
         row = await cursor.fetchone()
         if not row:
@@ -287,19 +283,26 @@ async def get_chat_history(
 
     config = {"configurable": {"thread_id": conversation_id}}
     state = await request.app.state.graph.aget_state(config)
-    
+
     messages = state.values.get("messages", [])
-    
+
     formatted_messages = []
     for msg in messages:
         # Avoid including empty or pure tool-call messages
-        if msg.type in ["human", "ai"] and msg.content and not getattr(msg, "tool_calls", None):
-            formatted_messages.append({
-                "role": "user" if msg.type == "human" else "assistant",
-                "content": str(msg.content)
-            })
-            
+        if (
+            msg.type in ["human", "ai"]
+            and msg.content
+            and not getattr(msg, "tool_calls", None)
+        ):
+            formatted_messages.append(
+                {
+                    "role": "user" if msg.type == "human" else "assistant",
+                    "content": str(msg.content),
+                }
+            )
+
     return {"messages": formatted_messages}
+
 
 @app.delete("/chat/conversations/{conversation_id}")
 async def delete_conversation(
@@ -311,13 +314,16 @@ async def delete_conversation(
     async with request.app.state.pool.connection() as conn:
         cursor = await conn.execute(
             "DELETE FROM customer_conversations WHERE conversation_id = %s AND customer_id = %s RETURNING conversation_id",
-            (conversation_id, customer_id)
+            (conversation_id, customer_id),
         )
         row = await cursor.fetchone()
         if not row:
-            raise HTTPException(status_code=404, detail="Conversation not found or not owned by user")
+            raise HTTPException(
+                status_code=404, detail="Conversation not found or not owned by user"
+            )
         await conn.commit()
     return {"status": "deleted"}
+
 
 @app.get("/orders")
 async def get_orders(
@@ -325,8 +331,15 @@ async def get_orders(
 ):
     """Fetch raw user orders from Supabase."""
     supabase = await get_supabase_client()
-    result = await supabase.table("orders").select("*").eq("customer_id", customer_id).order("ordered_at", desc=True).execute()
+    result = (
+        await supabase.table("orders")
+        .select("*")
+        .eq("customer_id", customer_id)
+        .order("ordered_at", desc=True)
+        .execute()
+    )
     return result.data
+
 
 @app.get("/products")
 async def get_products(

@@ -8,14 +8,17 @@ from app.services.token_tracker import TokenCostCallbackHandler
 
 logger = logging.getLogger(__name__)
 
+
 def estimate_tokens(texts) -> int:
     """Roughly estimate tokens (chars / 4)."""
     if isinstance(texts, str):
         return max(1, len(texts) // 4)
     return sum(max(1, len(t) // 4) for t in texts)
 
+
 class FallbackEmbeddings:
     """A simple wrapper to fallback to a secondary embedding model on failure."""
+
     def __init__(self, primary, fallback, primary_name: str, fallback_name: str):
         self.primary = primary
         self.fallback = fallback
@@ -71,50 +74,48 @@ class FallbackEmbeddings:
             self._log_cost(text, self.fallback_name)
             return res
 
+
 def get_llm(temperature=0.0):
     """Returns OpenAI model with Groq models as fallbacks."""
-    
+
     primary_llm = ChatOpenAI(
         model="gpt-4o-mini",
-        api_key=os.getenv('OPENAI_API_KEY'),
-        base_url=os.getenv('OPENAI_BASE_URL'),
+        api_key=os.getenv("OPENAI_API_KEY"),
+        base_url=os.getenv("OPENAI_BASE_URL"),
         temperature=temperature,
         max_retries=2,
-        timeout=15.0
+        timeout=15.0,
     )
 
     groq_llm_1 = ChatGroq(
-        model="openai/gpt-oss-20b",
-        temperature=temperature,
-        max_retries=2,
-        timeout=15.0
+        model="openai/gpt-oss-20b", temperature=temperature, max_retries=2, timeout=15.0
     )
-    
+
     # Fallback 2: Groq 120b
     groq_llm_2 = ChatGroq(
         model="openai/gpt-oss-120b",
         temperature=temperature,
         max_retries=2,
-        timeout=15.0
+        timeout=15.0,
     )
-    
+
     # Queue: primary -> groq_llm_1 -> groq_llm_2
     return primary_llm.with_fallbacks([groq_llm_1, groq_llm_2, primary_llm])
+
 
 def get_embeddings():
     """Returns Nomic embeddings with Gemini fallback."""
     primary_name = os.getenv("NOMIC_EMBEDDING_MODEL", "nomic-embed-text-v1.5")
     fallback_name = os.getenv("EMBEDDING_MODEL", "models/gemini-embedding-2")
-    
+
     nomic_embeddings = NomicEmbeddings(model=primary_name)
     gemini_embeddings = GoogleGenerativeAIEmbeddings(
-        model=fallback_name,
-        output_dimensionality=768
+        model=fallback_name, output_dimensionality=768
     )
-    
+
     return FallbackEmbeddings(
-        primary=nomic_embeddings, 
+        primary=nomic_embeddings,
         fallback=gemini_embeddings,
         primary_name=primary_name,
-        fallback_name=fallback_name
+        fallback_name=fallback_name,
     )

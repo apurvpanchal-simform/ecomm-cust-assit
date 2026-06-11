@@ -15,20 +15,18 @@ load_dotenv()
 _FAQ_TOOLS = [search_faq]
 _TOOL_MAP: dict[str, Any] = {t.name: t for t in _FAQ_TOOLS}
 
-SYSTEM_PROMPT = """You are a customer support agent for an e-commerce platform.
-Help customers with general questions about policies, shipping, returns, and company operations.
+SYSTEM_PROMPT = """You are a FAQ support agent for an e-commerce platform. You answer questions about policies, shipping, returns, and general company info.
 
-Rules:
-1. You MUST use the `search_faq` tool to retrieve context before answering.
-2. Answer ONLY using the provided context from the tool.
-3. Do not invent policies or information.
-4. If the answer is not in the context, clearly state that and suggest contacting human support.
-5. Be professional, concise, and helpful.
-6. Summarize the tool results in natural, friendly language.
-7. If the exact answer or data you need is already present in the 'Summary of earlier conversation', you may use it directly without making a duplicate tool call.
-8. CRITICAL: If the `search_faq` tool returns an "Error:" or fails, DO NOT call the tool again. Immediately apologize to the user and explain that the search service is temporarily unavailable.
-9. CRITICAL: If you receive a "specific task for this turn", you MUST prioritize that task and ignore unrelated parts of the user's broader conversation.
+## Rules
+1. Always use the `search_faq` tool to retrieve context before answering.
+2. Answer strictly from the retrieved context—never invent policies or facts.
+3. If the answer isn't in the context, say so and suggest contacting human support.
+4. If the context or data you need is already in the conversation summary, use it directly without a duplicate tool call.
+5. If `search_faq` returns an error, do NOT retry. Apologize and explain the service is temporarily unavailable.
+6. If you receive a "specific task for this turn", prioritize that task over unrelated conversation.
+7. Be professional, concise, and friendly.
 """
+
 
 @traceable(
     name="faq_node",
@@ -41,11 +39,11 @@ async def faq_node(state: AgentState, config: RunnableConfig) -> dict:
     # In Sequential List without isolation, we just read all recent messages
     summarized_count = state.get("summarized_message_count", 0)
     recent_messages = state.get("messages", [])[summarized_count:]
-    
+
     sub_queries = state.get("sub_queries") or {}
     sub_query = sub_queries.get("faq")
     search_term = sub_query if sub_query else state.get("query", "")
-    
+
     # Pre-fetch context using the search tool directly in Python
     try:
         context = str(await search_faq.ainvoke({"query": search_term})).strip()
@@ -63,14 +61,18 @@ async def faq_node(state: AgentState, config: RunnableConfig) -> dict:
     )
 
     conversation = [SystemMessage(content=SYSTEM_PROMPT)]
-    
+
     chat_summary = state.get("chat_summary", "")
     if chat_summary:
-        conversation.append(SystemMessage(content=f"Summary of earlier conversation:\n{chat_summary}"))
-        
+        conversation.append(
+            SystemMessage(content=f"Summary of earlier conversation:\n{chat_summary}")
+        )
+
     if sub_query:
-        conversation.append(SystemMessage(content=f"Your specific task for this turn: {sub_query}"))
-        
+        conversation.append(
+            SystemMessage(content=f"Your specific task for this turn: {sub_query}")
+        )
+
     conversation.append(context_message)
     conversation += filter_tool_messages(recent_messages)
 

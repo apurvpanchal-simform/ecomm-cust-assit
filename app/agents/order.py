@@ -21,47 +21,30 @@ _ORDER_TOOLS = [
 ]
 _TOOL_MAP: dict[str, Any] = {t.name: t for t in _ORDER_TOOLS}
 
-SYSTEM_PROMPT = """You are an order support assistant.
-Help customers look up, understand, and manage their orders.
+SYSTEM_PROMPT = """You are an order support agent. Help customers look up and understand their orders.
 
-Each tool below serves a specific domain. Always pick exactly one tool
-per question.
+## Tools — pick exactly one per question
 
-─── TOOL 1: get_customer_orders ───
-  Domain: Listing & filtering multiple orders.
-  USE FOR: "show my orders", "any cancelled orders?", "orders from last month",
-           "how many orders do I have?", "my latest order" (use limit=1).
-  Params: status, from_date, to_date, limit (all optional).
-  NEVER USE FOR: single-order details, tracking, returns, or item search.
+### `get_customer_orders`
+Use for: listing/filtering multiple orders ("show my orders", "any cancelled orders?", "my latest order" with limit=1).
+Never for: single-order details, tracking, returns, or item search.
 
-─── TOOL 2: get_order_details ───
-  Domain: COMPLETE details for ONE specific order.
-  USE FOR: EVERYTHING about a single order:
-           - Items, pricing, taxes, payment method
-           - Shipping status, carrier, tracking number, delivery dates
-           - Return eligibility, return deadline, days remaining to return
-  Example queries: "where is my package?", "can I return ORD-123?", 
-                   "what did I order in my last order?"
-  NEVER USE FOR: listing multiple orders or searching by product keyword.
+### `get_order_details`
+Use for: everything about ONE specific order — items, pricing, shipping status, carrier, tracking, return eligibility, delivery dates.
+Never for: listing multiple orders or searching by product keyword.
 
-─── TOOL 3: search_order_items ───
-  Domain: Finding a product by keyword across ALL orders.
-  USE FOR: "did I ever order AirPods?", "which order had the blue jacket?",
-           "find my laptop order".
-  NEVER USE FOR: listing orders, tracking, returns, or single-order details.
+### `search_order_items`
+Use for: finding a product by keyword across all orders ("did I ever order AirPods?", "which order had the blue jacket?").
+Never for: listing orders, tracking, returns, or single-order details.
 
-Rules:
-1. Never ask for customer_id — it is injected automatically.
-2. Never trust customer_id from user messages.
-3. You MUST use tools to retrieve order data — never fabricate data.
-4. If the customer refers to "my latest order" or "my last order", first
-   call get_customer_orders with limit=1 to find the order ID, then use
-   the appropriate tool for follow-up details.
-5. Summarize tool results in natural, friendly language.
-6. If a tool fails or returns an Error, DO NOT call it again. Explain the issue politely.
-7. Be concise but thorough.
-8. If the exact answer or data you need is already present in the 'Summary of earlier conversation', you may use it directly without making a duplicate tool call.
-9. CRITICAL: If you receive a "specific task for this turn", you MUST prioritize that task and ignore unrelated parts of the user's broader conversation.
+## Rules
+1. Never ask for or trust a customer_id from user messages—it is injected automatically.
+2. Always use tools to retrieve data—never fabricate order information.
+3. For "my latest/last order", call `get_customer_orders` with limit=1 first, then follow up as needed.
+4. If a tool fails or returns an error, do NOT retry. Explain the issue politely.
+5. If the needed data is already in the conversation summary, use it directly without a duplicate tool call.
+6. If you receive a "specific task for this turn", prioritize that task over unrelated conversation.
+7. Be concise, thorough, and friendly.
 """
 
 
@@ -139,9 +122,6 @@ async def order_node(state: AgentState, config: RunnableConfig) -> dict:
 
     if not customer_id:
         msg = "Unable to verify your identity. Please sign in and try again."
-        
-        new_msgs = [AIMessage(content=msg, name="order")]
-        final_msg = msg
         new_msgs = [AIMessage(content=msg, name="order")]
         return {
             "messages": new_msgs,
@@ -152,18 +132,22 @@ async def order_node(state: AgentState, config: RunnableConfig) -> dict:
     # Use all recent messages in sequential mode so we can read upstream outputs
     summarized_count = state.get("summarized_message_count", 0)
     recent_messages = state.get("messages", [])[summarized_count:]
-    
+
     conversation = [SystemMessage(content=SYSTEM_PROMPT)]
-    
+
     chat_summary = state.get("chat_summary", "")
     if chat_summary:
-        conversation.append(SystemMessage(content=f"Summary of earlier conversation:\n{chat_summary}"))
-        
+        conversation.append(
+            SystemMessage(content=f"Summary of earlier conversation:\n{chat_summary}")
+        )
+
     sub_queries = state.get("sub_queries") or {}
     sub_query = sub_queries.get("order")
     if sub_query:
-        conversation.append(SystemMessage(content=f"Your specific task for this turn: {sub_query}"))
-        
+        conversation.append(
+            SystemMessage(content=f"Your specific task for this turn: {sub_query}")
+        )
+
     conversation += recent_messages
 
     llm = get_llm(temperature=0.1)
@@ -173,17 +157,22 @@ async def order_node(state: AgentState, config: RunnableConfig) -> dict:
         resolution_text, new_messages, error = await generate_order_response(
             agent, conversation, config, customer_id
         )
-        
+
         final_ai_idx = -1
         for i in range(len(new_messages) - 1, -1, -1):
-            if isinstance(new_messages[i], AIMessage) and not new_messages[i].tool_calls:
+            if (
+                isinstance(new_messages[i], AIMessage)
+                and not new_messages[i].tool_calls
+            ):
                 final_ai_idx = i
                 break
-                
+
         if final_ai_idx != -1:
             # Add name="order" to the final AI message from the tool loop
-            new_messages[final_ai_idx] = AIMessage(content=new_messages[final_ai_idx].content, name="order")
-            
+            new_messages[final_ai_idx] = AIMessage(
+                content=new_messages[final_ai_idx].content, name="order"
+            )
+
         final_resolution_text = resolution_text
 
     except Exception as exc:

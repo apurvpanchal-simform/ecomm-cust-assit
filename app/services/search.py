@@ -5,6 +5,7 @@ from app.services.llm import get_embeddings
 
 load_dotenv()
 
+
 class VectorStore:
     def __init__(self):
         self.collection_name = "ecommerce-knowledge"
