@@ -4,7 +4,7 @@ Fetch full details for a single order — items, pricing, payment, shipping, and
 
 from typing import Annotated
 from datetime import datetime, timezone
-from langsmith import traceable
+from langfuse import observe
 from langchain_core.tools import tool, InjectedToolArg
 
 from app.db.supabase import get_supabase_client
@@ -13,7 +13,7 @@ from app.schemas.agent import ToolNotFoundResponse
 
 
 @tool
-@traceable(name="tool_get_order_details")
+@observe(name="tool_get_order_details")
 async def get_order_details(
     customer_id: Annotated[str, InjectedToolArg], order_id: str
 ) -> dict:

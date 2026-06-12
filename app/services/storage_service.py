@@ -1,8 +1,9 @@
 import os
+import logging
 from azure.storage.blob import BlobServiceClient
 
 
-def get_blob_client_service():
+def get_blob_service_client():
     connection_string = os.environ.get("AZURE_STORAGE_CONNECTION_STRING")
     if not connection_string or connection_string.startswith(
         "DefaultEndpointsProtocol=https;AccountName=..."
@@ -24,8 +25,6 @@ def _ensure_container_exists(client: BlobServiceClient, container: str):
             # First try to create it with public access so images are viewable
             container_client.create_container(public_access="blob")
         except Exception as e:
-            import logging
-
             logging.getLogger(__name__).warning(
                 f"Could not create public container, falling back to private: {e}"
             )
@@ -40,7 +39,7 @@ def _ensure_container_exists(client: BlobServiceClient, container: str):
 
 def upload_product_image(image_bytes: bytes, product_id: str, ext: str = "jpg") -> str:
     """Upload product image, return public CDN URL."""
-    client = get_blob_client_service()
+    client = get_blob_service_client()
     container = get_container_name()
     _ensure_container_exists(client, container)
     blob_name = f"catalog/{product_id}.{ext}"

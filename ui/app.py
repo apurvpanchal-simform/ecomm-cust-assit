@@ -260,7 +260,7 @@ def show_orders_dialog():
                     else "🚚" if order["status"] == "shipped" else "⏳"
                 )
                 with st.expander(
-                    f"{status_emoji} Order **{order['id']}** - ${order['total']} ({order['status'].title()})"
+                    f"{status_emoji} Order **{order['id']}** - ₹{order['total']} ({order['status'].title()})"
                 ):
                     st.write(f"**Ordered:** {order['ordered_at'][:10]}")
                     if order.get("delivered_at"):
@@ -299,7 +299,7 @@ def show_orders_dialog():
                                 st.image(item["image"], width=50)
                         with col2:
                             st.markdown(
-                                f"**{item_name}**{detail_str} (x{item.get('quantity', 1)})<br>${item.get('price', 0)}",
+                                f"**{item_name}**{detail_str} (x{item.get('quantity', 1)})<br>₹{item.get('price', 0)}",
                                 unsafe_allow_html=True,
                             )
         else:
@@ -326,7 +326,7 @@ def show_products_dialog():
                 return
 
             for product in products:
-                with st.expander(f"**{product['title']}** - ${product['price']}"):
+                with st.expander(f"**{product['title']}** - ₹{product['price']}"):
                     col1, col2 = st.columns([1, 3])
                     with col1:
                         if product.get("image"):
@@ -415,10 +415,7 @@ with st.sidebar:
             show_products_dialog()
 
         st.divider()
-        if st.button("🗑️ Clear Local Chat", use_container_width=True):
-            st.session_state.messages = []
-            st.session_state.uploader_key += 1
-            st.rerun()
+
 
     else:
         st.info("Please log in to start chatting.")
@@ -616,10 +613,10 @@ else:
             image_b64 = base64.b64encode(uploaded_file.read()).decode("utf-8")
         st.session_state.current_image_b64 = image_b64
 
-        # Add user message to history
         user_msg = {"role": "user", "content": prompt}
         if image_b64:
             user_msg["image"] = image_b64
+
         st.session_state.messages.append(user_msg)
 
         st.session_state.is_generating = True
@@ -634,40 +631,25 @@ else:
 
         # Get AI response
         with st.chat_message("assistant"):
-            col1, col2 = st.columns([5, 1])
-            with col2:
-                if st.button("🛑 Stop", key="stop_btn"):
-                    st.session_state.is_generating = False
-                    st.session_state.messages.append(
-                        {
-                            "role": "assistant",
-                            "content": "⚠️ Generation stopped by user.",
-                        }
-                    )
-                    if uploaded_file:
-                        st.session_state.uploader_key += 1
-                        st.session_state.show_uploader = False
-                    st.rerun()
+            with st.spinner("Thinking..."):
+                response_text = send_message(actual_prompt, image_b64)
 
-            with col1:
-                with st.spinner("Thinking..."):
-                    response_text = send_message(actual_prompt, image_b64)
-
-                if response_text:
-                    reasoning, clean_text = parse_reasoning(response_text)
-                    if reasoning:
-                        with st.expander("💭 Thinking Process"):
-                            st.markdown(reasoning)
-                    st.markdown(clean_text, unsafe_allow_html=True)
-                    st.session_state.messages.append(
-                        {"role": "assistant", "content": response_text}
-                    )
-                else:
-                    error_msg = "Something went wrong. Please try again."
-                    st.error(error_msg)
-                    st.session_state.messages.append(
-                        {"role": "assistant", "content": error_msg}
-                    )
+            if response_text:
+                reasoning, clean_text = parse_reasoning(response_text)
+                if reasoning:
+                    with st.expander("💭 Thinking Process"):
+                        st.markdown(reasoning)
+                st.markdown(clean_text, unsafe_allow_html=True)
+                
+                st.session_state.messages.append(
+                    {"role": "assistant", "content": response_text}
+                )
+            else:
+                error_msg = "Something went wrong. Please try again."
+                st.error(error_msg)
+                st.session_state.messages.append(
+                    {"role": "assistant", "content": error_msg}
+                )
 
         st.session_state.is_generating = False
         if uploaded_file:

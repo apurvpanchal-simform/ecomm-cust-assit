@@ -1,6 +1,5 @@
 """Response schemas for agent outputs and intent classification."""
 
-from enum import StrEnum
 from typing import Optional, Literal
 from pydantic import BaseModel, Field
 
@@ -30,7 +29,7 @@ class ToolNotFoundResponse(BaseModel):
 
 
 class Route(BaseModel):
-    pending_agents: list[Literal["faq", "order", "visual_search_agent"]] = Field(
+    pending_agents: list[Literal["faq", "order", "image_search_agent"]] = Field(
         description="The ordered list of agents to execute. Put data-gathering agents first if others depend on them. Return an empty list if the query is ONLY a greeting, chitchat, vague search, or completely out-of-domain."
     )
     sub_queries: dict[str, str] = Field(

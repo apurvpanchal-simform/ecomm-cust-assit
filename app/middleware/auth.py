@@ -6,7 +6,7 @@ from fastapi.security import (
     HTTPAuthorizationCredentials,
 )
 
-from app.services.auth import (
+from app.services.jwt_auth import (
     verify_jwt,
 )
 

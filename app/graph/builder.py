@@ -5,10 +5,10 @@ from app.agents.supervisor import supervisor_node
 from app.agents.summarizer import summarizer_node
 from app.agents.synthesizer import synthesizer_node
 from app.agents.clip_embedding import clip_embedding_node
-from app.agents.visual_search import visual_search_node
+from app.agents.image_search import image_search_node
 
 from app.agents.image_analyzer import image_analyzer_node
-from app.agents.cleanup import cleanup_node
+from app.graph.cleanup import cleanup_node
 from app.graph.state import AgentState
 
 
@@ -34,7 +34,7 @@ builder.add_node("supervisor", supervisor_node)
 builder.add_node("faq", faq_node)
 builder.add_node("order", order_node)
 builder.add_node("clip_embedder", clip_embedding_node)
-builder.add_node("visual_search", visual_search_node)
+builder.add_node("image_search", image_search_node)
 
 builder.add_node("cleanup", cleanup_node)
 builder.add_node("synthesizer", synthesizer_node)
@@ -56,7 +56,7 @@ builder.add_conditional_edges(
     {
         "faq": "faq",
         "order": "order",
-        "visual_search_agent": "clip_embedder",
+        "image_search_agent": "clip_embedder",
         "synthesizer": "synthesizer",
         END: END,
     },
@@ -70,7 +70,7 @@ def route_after_agent(state: AgentState) -> str:
 
     for agent in pending:
         if agent not in executed:
-            if agent == "visual_search_agent":
+            if agent == "image_search_agent":
                 return "clip_embedder"
             return agent
 
@@ -83,9 +83,9 @@ AGENT_ROUTES = ["faq", "order", "clip_embedder", "synthesizer"]
 builder.add_conditional_edges("faq", route_after_agent, AGENT_ROUTES)
 builder.add_conditional_edges("order", route_after_agent, AGENT_ROUTES)
 
-# Visual Search Pipeline
-builder.add_edge("clip_embedder", "visual_search")
-builder.add_edge("visual_search", "cleanup")
+# Image Search Pipeline
+builder.add_edge("clip_embedder", "image_search")
+builder.add_edge("image_search", "cleanup")
 builder.add_conditional_edges("cleanup", route_after_agent, AGENT_ROUTES)
 
 builder.add_edge("synthesizer", "summarizer")

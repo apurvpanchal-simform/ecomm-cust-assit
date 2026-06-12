@@ -3,6 +3,8 @@ import logging
 from azure.ai.vision.imageanalysis import ImageAnalysisClient
 from azure.ai.vision.imageanalysis.models import VisualFeatures
 from azure.core.credentials import AzureKeyCredential
+import base64
+import requests
 
 logger = logging.getLogger(__name__)
 
@@ -37,8 +39,7 @@ def analyze_image_bytes(image_bytes: bytes) -> dict:
         )
         logger.info("Azure AI Vision response received.")
 
-        # We removed CAPTION because it is unsupported in some Azure regions
-        caption = ""
+        caption = result.caption.text if result.caption else ""
         tags = [tag.name for tag in result.tags.list] if result.tags else []
         logger.info(f"-> Extracted Tags: {tags}")
 
@@ -58,12 +59,10 @@ def analyze_image_bytes(image_bytes: bytes) -> dict:
 
 
 def analyze_image_base64(b64_str: str) -> dict:
-    import base64
-
     return analyze_image_bytes(base64.b64decode(b64_str))
 
 
-import requests
+
 
 
 def vectorize_image_bytes(image_bytes: bytes) -> list[float]:
@@ -95,8 +94,6 @@ def vectorize_image_bytes(image_bytes: bytes) -> list[float]:
 
 
 def vectorize_image_base64(b64_str: str) -> list[float]:
-    import base64
-
     return vectorize_image_bytes(base64.b64decode(b64_str))
 
 

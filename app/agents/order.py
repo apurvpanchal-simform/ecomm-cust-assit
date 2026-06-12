@@ -2,14 +2,14 @@ import os
 from typing import Any
 
 from dotenv import load_dotenv
-from langsmith import traceable
+from langfuse import observe
 from langchain_core.messages import AIMessage, SystemMessage, ToolMessage
 from langchain_core.runnables import RunnableConfig
 
 from app.tools.order_lookup import get_customer_orders
 from app.tools.order_details import get_order_details
 from app.tools.order_items import search_order_items
-from app.services.llm import get_llm
+from app.services.llm_factory import get_llm
 from app.graph.state import AgentState
 
 load_dotenv()
@@ -48,7 +48,7 @@ Never for: listing orders, tracking, returns, or single-order details.
 """
 
 
-@traceable(name="order_generation")
+@observe(name="order_generation")
 async def generate_order_response(
     agent,
     conversation: list,
@@ -110,13 +110,39 @@ async def generate_order_response(
     return text, new_messages, None
 
 
-@traceable(
-    name="order_node",
-    metadata={
-        "agent": "order",
-    },
-)
+@observe(name="order_node")
 async def order_node(state: AgentState, config: RunnableConfig) -> dict:
+    """
+    Handles user queries related to their personal order history and tracking.
+
+    This node is part of the LangGraph multi-agent architecture and acts as the Order specialist. 
+    It leverages tools to query a Supabase database for order information, specific item details, 
+    and delivery tracking.
+
+    Flow:
+    1. Validates the presence of `customer_id` in the state (injected by authentication middleware). 
+       If missing, aborts and returns an error message requesting login.
+    2. Constructs a conversation array containing the system prompt, chat summary, specific task 
+       instructions from the supervisor, and the recent conversation history.
+    3. Binds the necessary Supabase DB tools to the LLM.
+    4. Enters a tool-calling loop (`generate_order_response`) where the LLM can iteratively invoke 
+       tools (e.g., getting all orders, then getting details for a specific order) until it has 
+       gathered enough information to answer the user's query.
+    5. Formats the final AI response, tags it with `name="order"`, and appends all intermediate 
+       tool messages and the final response to the state.
+    6. Marks the `order` agent as executed.
+
+    Args:
+        state (AgentState): The global state of the conversation, containing authentication data, 
+                            history, and sub-queries.
+        config (RunnableConfig): Configuration parameters for LangChain execution.
+
+    Returns:
+        dict: A dictionary containing:
+            - `messages`: A list of intermediate ToolMessages and the final AIMessage.
+            - `error`: An error string if an exception occurred, otherwise None.
+            - `executed_agents`: The updated list of agents that have run in this turn.
+    """
 
     customer_id = state.get("customer_id")
 

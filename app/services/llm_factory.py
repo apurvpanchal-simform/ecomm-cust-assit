@@ -1,10 +1,11 @@
 import os
 import logging
+from dotenv import load_dotenv
+
+load_dotenv()
 from langchain_groq import ChatGroq
-from langchain_openai import ChatOpenAI
+from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
-from langchain_nomic.embeddings import NomicEmbeddings
-from app.services.token_tracker import TokenCostCallbackHandler
 
 logger = logging.getLogger(__name__)
 
@@ -24,97 +25,92 @@ class FallbackEmbeddings:
         self.fallback = fallback
         self.primary_name = primary_name
         self.fallback_name = fallback_name
-        self.tracker = TokenCostCallbackHandler()
-
-    def _log_cost(self, texts, model_name: str):
-        tokens = estimate_tokens(texts)
-        self.tracker.log_embedding_cost(model_name, tokens)
 
     def embed_documents(self, texts):
         try:
             res = self.primary.embed_documents(texts)
-            self._log_cost(texts, self.primary_name)
             return res
         except Exception as e:
             logger.warning(f"Primary embedding failed, using fallback: {e}")
             res = self.fallback.embed_documents(texts)
-            self._log_cost(texts, self.fallback_name)
             return res
 
     def embed_query(self, text):
         try:
             res = self.primary.embed_query(text)
-            self._log_cost(text, self.primary_name)
             return res
         except Exception as e:
             logger.warning(f"Primary embedding failed, using fallback: {e}")
             res = self.fallback.embed_query(text)
-            self._log_cost(text, self.fallback_name)
             return res
 
     async def aembed_documents(self, texts):
         try:
             res = await self.primary.aembed_documents(texts)
-            self._log_cost(texts, self.primary_name)
             return res
         except Exception as e:
             logger.warning(f"Primary async embedding failed, using fallback: {e}")
             res = await self.fallback.aembed_documents(texts)
-            self._log_cost(texts, self.fallback_name)
             return res
 
     async def aembed_query(self, text):
         try:
             res = await self.primary.aembed_query(text)
-            self._log_cost(text, self.primary_name)
             return res
         except Exception as e:
             logger.warning(f"Primary async embedding failed, using fallback: {e}")
             res = await self.fallback.aembed_query(text)
-            self._log_cost(text, self.fallback_name)
             return res
 
 
 def get_llm(temperature=0.0):
-    """Returns OpenAI model with Groq models as fallbacks."""
+    """Returns OpenAI/Groq models with fallbacks as requested."""
 
-    primary_llm = ChatOpenAI(
+    oss_20b_llm = ChatGroq(
+        model="openai/gpt-oss-20b", 
+        temperature=temperature, 
+        max_retries=2, 
+        timeout=15.0
+    )
+
+    gpt4o_mini_llm = ChatOpenAI(
         model="gpt-4o-mini",
         api_key=os.getenv("OPENAI_API_KEY"),
         base_url=os.getenv("OPENAI_BASE_URL"),
         temperature=temperature,
-        max_retries=2,
+        max_retries=1,
         timeout=15.0,
     )
 
-    groq_llm_1 = ChatGroq(
-        model="openai/gpt-oss-20b", temperature=temperature, max_retries=2, timeout=15.0
-    )
-
-    # Fallback 2: Groq 120b
-    groq_llm_2 = ChatGroq(
+    oss_120b_llm = ChatGroq(
         model="openai/gpt-oss-120b",
         temperature=temperature,
         max_retries=2,
         timeout=15.0,
     )
 
-    # Queue: primary -> groq_llm_1 -> groq_llm_2
-    return primary_llm.with_fallbacks([groq_llm_1, groq_llm_2, primary_llm])
+    # Queue: primary (20b) -> fallback 1 (4o-mini) -> fallback 2 (120b)
+    return oss_20b_llm.with_fallbacks([gpt4o_mini_llm, oss_120b_llm])
 
 
 def get_embeddings():
-    """Returns Nomic embeddings with Gemini fallback."""
-    primary_name = os.getenv("NOMIC_EMBEDDING_MODEL", "nomic-embed-text-v1.5")
+    """Returns OpenAI text-embedding-3-large embeddings with Gemini fallback."""
+    primary_name = os.getenv("OPENAI_EMBEDDING_MODEL", "text-embedding-3-large")
     fallback_name = os.getenv("EMBEDDING_MODEL", "models/gemini-embedding-2")
 
-    nomic_embeddings = NomicEmbeddings(model=primary_name)
+    primary_embeddings = OpenAIEmbeddings(
+        model=os.getenv("OPENROUTER_EMBEDDING_MODEL", "openai/text-embedding-3-small"),
+        dimensions=1024,
+        api_key=os.getenv("OPENROUTER_API_KEY", os.getenv("OPENAI_API_KEY")),
+        base_url="https://openrouter.ai/api/v1"
+    )
+    
     gemini_embeddings = GoogleGenerativeAIEmbeddings(
         model=fallback_name, output_dimensionality=768
     )
 
     return FallbackEmbeddings(
-        primary=nomic_embeddings,
+        primary=primary_embeddings,
         fallback=gemini_embeddings,
         primary_name=primary_name,
         fallback_name=fallback_name,

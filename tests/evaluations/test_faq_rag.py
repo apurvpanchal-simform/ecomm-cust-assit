@@ -1,7 +1,7 @@
 import pytest
 from deepeval import assert_test
 from deepeval.test_case import LLMTestCase
-from deepeval.metrics import AnswerRelevancyMetric, FaithfulnessMetric, ContextualRelevancyMetric
+from deepeval.metrics import AnswerRelevancyMetric, FaithfulnessMetric, ContextualRelevancyMetric, ContextualPrecisionMetric, ContextualRecallMetric
 
 from tests.evaluations.custom_model import GroqEvaluator
 from tests.evaluations.mock_dataset import mock_faq_dataset
@@ -27,8 +27,9 @@ async def test_faq_rag(data):
     # We call the tool directly to see what context it gets for this query
     retrieval_context_str = str(await search_faq.ainvoke({"query": user_input}))
     
-    # DeepEval expects a list of strings for context
-    retrieval_context = [retrieval_context_str] if retrieval_context_str else []
+    # DeepEval expects a list of strings for context. 
+    # Our search_faq tool returns a string joined by '\n\n---\n\n'
+    retrieval_context = [chunk.strip() for chunk in retrieval_context_str.split("\n\n---\n\n")] if retrieval_context_str else []
 
     # 2. Mock AgentState and run the node
     mock_state = {
@@ -57,17 +58,19 @@ async def test_faq_rag(data):
         input=user_input,
         actual_output=actual_output,
         expected_output=expected_output,
-        retrieval_context=retrieval_context
+        retrieval_context=retrieval_context,
+        expected_context=expected_context
     )
 
-    # 4. Initialize Metrics
     answer_relevancy = AnswerRelevancyMetric(threshold=0.7, model=evaluator_model)
     faithfulness = FaithfulnessMetric(threshold=0.7, model=evaluator_model)
     contextual_relevancy = ContextualRelevancyMetric(threshold=0.7, model=evaluator_model)
+    contextual_precision = ContextualPrecisionMetric(threshold=0.7, model=evaluator_model)
+    contextual_recall = ContextualRecallMetric(threshold=0.7, model=evaluator_model)
 
     # 5. Assert the metrics sequentially to respect the API rate limits
     errors = []
-    for metric in [answer_relevancy, faithfulness, contextual_relevancy]:
+    for metric in [answer_relevancy, faithfulness, contextual_relevancy, contextual_precision, contextual_recall]:
         try:
             assert_test(test_case, [metric])
         except AssertionError as e:

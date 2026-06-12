@@ -1,7 +1,10 @@
 from langchain_core.messages import SystemMessage, HumanMessage
 from langchain_core.runnables import RunnableConfig
 from app.graph.state import AgentState
-from langsmith import traceable
+from langfuse import observe
+import os
+import logging
+from app.services.llm_factory import get_llm
 
 SUMMARIZER_PROMPT = """You are a conversation summarizer. Compress older chat history into a minimal set of facts.
 
@@ -14,7 +17,7 @@ SUMMARIZER_PROMPT = """You are a conversation summarizer. Compress older chat hi
 """
 
 
-@traceable(name="summarizer_node")
+@observe(name="summarizer_node")
 async def summarizer_node(state: AgentState, config: RunnableConfig) -> dict:
     """Updates the running summary of the conversation if needed."""
     all_messages = state.get("messages", [])
@@ -58,7 +61,7 @@ async def summarizer_node(state: AgentState, config: RunnableConfig) -> dict:
 
         new_content_text = "\n\n".join(formatted_messages)
 
-        from app.services.llm import get_llm
+
 
         llm = get_llm(temperature=0.0)
 
@@ -79,7 +82,7 @@ async def summarizer_node(state: AgentState, config: RunnableConfig) -> dict:
             response = await llm.ainvoke(prompt_messages, config=config)
             new_summary = response.content
 
-            import logging
+
 
             logger = logging.getLogger(__name__)
             logger.info(
@@ -87,7 +90,7 @@ async def summarizer_node(state: AgentState, config: RunnableConfig) -> dict:
             )
 
             try:
-                import os
+
 
                 os.makedirs("data", exist_ok=True)
                 with open("data/summaries.log", "a", encoding="utf-8") as f:
@@ -103,13 +106,13 @@ async def summarizer_node(state: AgentState, config: RunnableConfig) -> dict:
                 "summarized_message_count": new_summarized_count,
             }
         except Exception as e:
-            import logging
+
 
             logging.getLogger(__name__).exception(f"[SUMMARIZER] LLM Error: {e}")
             return {}
 
     # If no summarization is needed, return an empty dict (state unchanged)
-    import logging
+
 
     logging.getLogger(__name__).debug(
         f"[SUMMARIZER] Sleeping. Total msgs: {len(all_messages)}, Summarized: {summarized_count}"

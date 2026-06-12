@@ -1,6 +1,8 @@
+from langchain_core.runnables import RunnableConfig
 import os
 import asyncio
 import logging
+import json
 import redis.asyncio as redis
 
 from contextlib import asynccontextmanager
@@ -26,12 +28,11 @@ from app.schemas.api import (
 )
 
 from typing import List
-from app.services.auth import (
+from app.services.jwt_auth import (
     generate_jwt,
 )
-from app.services.token_tracker import TokenCostCallbackHandler
 
-from app.services.customers import (
+from app.db.customers import (
     CustomerService,
 )
 
@@ -44,6 +45,9 @@ from app.middleware.rate_limit import (
 )
 
 from app.db.supabase import get_supabase_client
+
+from langfuse import observe
+from langfuse.langchain import CallbackHandler
 
 load_dotenv(override=True)
 
@@ -81,6 +85,26 @@ async def lifespan(app: FastAPI):
             postgres_saver = AsyncPostgresSaver(pool)
             await postgres_saver.setup()
 
+            # Ensure custom checkpoint_state_logs table exists
+            logger.info("Ensuring checkpoint_state_logs table exists...")
+            async with pool.connection() as conn:
+                await conn.execute("""
+                    CREATE TABLE IF NOT EXISTS checkpoint_state_logs (
+                        id                   BIGSERIAL PRIMARY KEY,
+                        conversation_id      TEXT NOT NULL,
+                        checkpoint_id        TEXT NOT NULL,
+                        parent_checkpoint_id TEXT,
+                        step_node            TEXT,
+                        state_values         JSONB NOT NULL,
+                        metadata             JSONB,
+                        created_at           TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+                    );
+                """)
+                await conn.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_checkpoint_state_logs_conversation 
+                    ON checkpoint_state_logs(conversation_id);
+                """)
+
             # The customer_conversations table is managed in app/db/schema.sql
 
             app.state.pool = pool
@@ -93,6 +117,7 @@ async def lifespan(app: FastAPI):
             dual_checkpointer = AsyncDualCheckpointer(
                 redis_saver=redis_saver,
                 postgres_saver=postgres_saver,
+                pool=pool,
             )
 
             app.state.graph = compile_graph(checkpointer=dual_checkpointer)
@@ -143,6 +168,7 @@ async def login(
 
 
 @app.post("/chat")
+@observe()
 async def chat(
     request: Request,
     chat_request: ChatRequest,
@@ -165,9 +191,11 @@ async def chat(
         f"Invoking graph | " f"customer_id={customer_id} | " f"thread_id={thread_id}"
     )
 
-    tracker = TokenCostCallbackHandler()
-    config = {"configurable": {"thread_id": thread_id}, "callbacks": [tracker]}
-
+    langfuse_handler = CallbackHandler()
+    config = RunnableConfig(
+        configurable={"thread_id": thread_id},
+        callbacks=[langfuse_handler],
+    )
     # Enforce conversation length limit
     current_state = await request.app.state.graph.aget_state(config)
     if len(current_state.values.get("messages", [])) > 100:
@@ -184,8 +212,6 @@ async def chat(
         "pending_agents": [],
         "executed_agents": [],
     }
-
-    import json
 
     logger.info("--- GRAPH EXECUTION START ---")
 
@@ -232,8 +258,6 @@ async def chat(
 
     final_state = await request.app.state.graph.aget_state(config)
     logger.info("--- GRAPH EXECUTION END ---")
-
-    tracker.log_run_total(thread_id=thread_id)
 
     result = final_state.values
     safe_result = {
@@ -287,19 +311,34 @@ async def get_chat_history(
     messages = state.values.get("messages", [])
 
     formatted_messages = []
-    for msg in messages:
-        # Avoid including empty or pure tool-call messages
-        if (
-            msg.type in ["human", "ai"]
-            and msg.content
-            and not getattr(msg, "tool_calls", None)
-        ):
+    current_turn_ai_messages = []
+
+    def flush_ai_messages():
+        if current_turn_ai_messages:
+            synth_msg = next((m for m in current_turn_ai_messages if getattr(m, "name", "") == "synthesizer"), None)
+            final_msg = synth_msg if synth_msg else current_turn_ai_messages[-1]
             formatted_messages.append(
                 {
-                    "role": "user" if msg.type == "human" else "assistant",
-                    "content": str(msg.content),
+                    "role": "assistant",
+                    "content": str(final_msg.content),
                 }
             )
+            current_turn_ai_messages.clear()
+
+    for msg in messages:
+        if msg.type == "human":
+            flush_ai_messages()
+            if msg.content:
+                formatted_messages.append(
+                    {
+                        "role": "user",
+                        "content": str(msg.content),
+                    }
+                )
+        elif msg.type == "ai" and msg.content and not getattr(msg, "tool_calls", None):
+            current_turn_ai_messages.append(msg)
+
+    flush_ai_messages()
 
     return {"messages": formatted_messages}
 

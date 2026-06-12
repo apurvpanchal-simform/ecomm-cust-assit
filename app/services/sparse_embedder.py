@@ -1,11 +1,10 @@
 from functools import lru_cache
 from typing import Dict, Any
 
+from fastembed import SparseTextEmbedding
 
 @lru_cache(maxsize=1)
 def load_sparse_model():
-    from fastembed import SparseTextEmbedding
-
     # Load the highly optimized Qdrant BM25 model
     model = SparseTextEmbedding("Qdrant/bm25")
     return model

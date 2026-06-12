@@ -15,11 +15,11 @@ from dotenv import load_dotenv
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app.db.qdrant import get_qdrant_client, ensure_product_images_collection
-from app.services.clip_embedder import embed_image_bytes
+from app.services.dense_embedder import embed_image_bytes
 from app.services.sparse_embedder import embed_sparse_text
 
-# from app.services.azure_vision import vectorize_image_bytes
-from app.services.azure_blob import upload_product_image
+# from app.services.vision_service import vectorize_image_bytes
+from app.services.storage_service import upload_product_image
 from supabase import create_client
 
 load_dotenv(override=True)

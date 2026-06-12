@@ -19,15 +19,15 @@
 
 ## Features
 
-- **🤖 Multi-Agent Orchestration** — A supervisor agent intelligently routes user queries to specialized sub-agents (FAQ, Order, Visual Search) using LangGraph's state machine.
+- **🤖 Multi-Agent Orchestration** — A supervisor agent intelligently routes user queries to specialized sub-agents (FAQ, Order, Image Search) using LangGraph's state machine.
 - **📦 Order Management** — Customers can check order status, view order details, track shipments, and look up past purchases using natural language.
 - **❓ FAQ Knowledge Base** — RAG-powered FAQ agent retrieves answers from a curated knowledge base covering shipping, returns, payments, warranties, and account policies.
-- **🖼️ Visual Product Search** — Upload a product image and the system uses OpenAI CLIP embeddings to find visually similar products from the catalog via Qdrant vector search.
+- **🖼️ Multimodal Product Search** — Upload a product image and the system extracts tags using Azure Vision and finds visually and semantically similar products via Qdrant Hybrid Search.
 - **💬 Persistent Chat Memory** — Dual-layer checkpointing system with Redis (hot cache) and Postgres (durable storage) ensures blazing-fast conversation recall with zero data loss.
 - **📝 Automatic Summarization** — A dedicated summarizer agent condenses long conversation histories to keep context windows lean and inference costs low.
 - **🔐 JWT Authentication** — Secure, stateless authentication via JSON Web Tokens tied to customer identities.
 - **🔄 LLM Fallback Chain** — Primary model (Groq) with automatic fallback to Google Gemini, ensuring high availability.
-- **📊 Token Usage Tracking** — Built-in callback handler that logs token consumption and estimated costs per request.
+- **🧪 DeepEval Evaluation** — Built-in test suites using Confident AI's DeepEval framework to measure RAG retrieval and faithfulness.
 - **🚀 CI/CD Pipeline** — Fully automated GitHub Actions workflow that builds, containerizes, and deploys to Azure Container Apps on every push.
 
 ---
@@ -43,11 +43,11 @@
 | **Supervisor** | Analyzes user intent and routes to the correct sub-agent(s). Handles greetings and chitchat directly. Supports multi-agent delegation for complex queries. |
 | **FAQ** | Performs semantic search over the knowledge base (shipping, returns, payments, warranties, accounts) using Nomic/Gemini embeddings + Qdrant. |
 | **Order** | Looks up customer-specific order data from Supabase using tool calls (`order_lookup`, `order_details`, `order_items`). |
-| **CLIP Embedder** | Converts uploaded images or text queries into CLIP embedding vectors for visual similarity search. |
-| **Visual Search** | Queries the `product_images` Qdrant collection to find the most visually similar products. |
-| **Result Formatter** | Formats visual search results into a rich, human-readable response with product cards. |
+| **Image Analyzer** | Uses Azure Computer Vision to extract tags and descriptions from user-uploaded images. |
+| **CLIP Embedding** | Converts text queries or images into CLIP embedding vectors for visual similarity search. |
+| **Image Search** | Queries the `product_images` Qdrant collection using multimodal fusion hybrid search to find the most visually similar products. |
+| **Synthesizer** | Synthesizes responses when multiple agents are triggered simultaneously. |
 | **Summarizer** | Compresses long conversation histories into concise summaries to stay within LLM context windows. |
-| **Out of Domain** | Returns a friendly message when the user's query falls outside supported topics. |
 
 ---
 
@@ -59,25 +59,27 @@
 | [FastAPI](https://fastapi.tiangolo.com/) | Async REST API framework |
 | [LangGraph](https://langchain-ai.github.io/langgraph/) | Multi-agent orchestration state machine |
 | [LangChain](https://python.langchain.com/) | LLM abstractions, tools, and embeddings |
-| [LangSmith](https://smith.langchain.com/) | Observability, tracing, and debugging |
+| [Langfuse](https://langfuse.com/) | Observability, tracing, and debugging |
+| [DeepEval](https://www.confident-ai.com/) | LLM evaluation and unit testing |
 
 ### LLM Providers
 | Provider | Model | Role |
 |---|---|---|
-| [Groq](https://groq.com/) | `qwen/qwen3-32b` | Primary inference (ultra-fast) |
-| [Google Gemini](https://ai.google.dev/) | `gemini-2.5-flash-lite` | Fallback inference |
+| [Groq](https://groq.com/) | `openai/gpt-oss-20b` | Primary inference |
+| [OpenAI](https://openai.com/) | `gpt-4o-mini` | Fallback 1 |
+| [Groq](https://groq.com/) | `openai/gpt-oss-120b` | Fallback 2 |
 
 ### Embeddings
 | Provider | Model | Role |
 |---|---|---|
-| [Nomic](https://nomic.ai/) | `nomic-embed-text-v1.5` | Primary text embeddings (768d) |
+| [OpenRouter (OpenAI)](https://openrouter.ai/) | `openai/text-embedding-3-small` | Primary text embeddings (1024d) |
 | [Google Gemini](https://ai.google.dev/) | `gemini-embedding-2` | Fallback text embeddings (768d) |
-| [OpenAI CLIP](https://github.com/mlfoundations/open_clip) | `ViT-B-32` | Image embeddings (512d) |
+| [Google SigLIP](https://huggingface.co/google/siglip-base-patch16-224) | `siglip-base-patch16-224` | Image embeddings (768d) |
 
 ### Data Stores
 | Service | Purpose |
 |---|---|
-| [Supabase](https://supabase.com/) (Postgres) | Customer data, orders, products, conversations, and durable LangGraph checkpoints |
+| [Supabase](https://supabase.com/) (Postgres) | Customer data, orders, products, conversations, durable LangGraph checkpoints, and readable JSON state logs (`checkpoint_state_logs`) |
 | [Redis](https://redis.io/) | Hot-cache LangGraph checkpoints for fast conversation recall |
 | [Qdrant Cloud](https://qdrant.tech/) | Vector database for FAQ semantic search and visual product search |
 | [Azure Blob Storage](https://azure.microsoft.com/en-us/products/storage/blobs/) | Product image CDN |
@@ -87,81 +89,108 @@
 |---|---|
 | [Streamlit](https://streamlit.io/) | Chat UI with image upload, conversation history, and rich product cards |
 
-### DevOps
-| Service | Purpose |
-|---|---|
-| [GitHub Actions](https://github.com/features/actions) | CI/CD pipeline |
-| [Azure Container Registry](https://azure.microsoft.com/en-us/products/container-registry/) | Docker image storage |
-| [Azure Container Apps](https://azure.microsoft.com/en-us/products/container-apps/) | Serverless container hosting |
-| [Docker](https://www.docker.com/) | Multi-stage containerization |
-
 ---
 
 ## Project Structure
 
 ```
 ecomm-cust-assit/
+├── .dockerignore                   # Files to ignore in Docker builds
+├── .env                            # Environment variables (local dev)
+├── .env.example                    # Sample environment variables
+├── .gitignore                      # Files ignored by git version control
+├── .python-version                 # Active python version specification
+├── Dockerfile                      # Multi-stage container definition
+├── README.md                       # Project overview and instructions
+├── ecomm_architecture.png          # System architecture design diagram
+├── pyproject.toml                  # Project metadata and dependencies (uv)
+├── start.sh                        # Entrypoint script to start backend & frontend
+├── uv.lock                         # Pinned dependency versions lockfile
 ├── .github/
 │   └── workflows/
-│       └── azure-deploy.yml        # CI/CD pipeline
+│       └── azure-deploy.yml        # CI/CD deployment pipeline
 ├── app/
-│   ├── agents/                     # LangGraph agent nodes
-│   │   ├── clip_embedding.py       # CLIP image/text embedding
-│   │   ├── faq.py                  # FAQ retrieval agent
-│   │   ├── order.py                # Order management agent
-│   │   ├── result_formatter.py     # Visual search result formatter
-│   │   ├── summarizer.py           # Conversation summarizer
-│   │   ├── supervisor.py           # Intent router + orchestrator
-│   │   └── visual_search.py        # Qdrant visual similarity search
+│   ├── __init__.py                 # Makes app package importable
+│   ├── main.py                     # FastAPI app definition + startup lifespan
+│   ├── agents/
+│   │   ├── __init__.py
+│   │   ├── clip_embedding.py       # CLIP text/image semantic embedding node
+│   │   ├── faq.py                  # RAG-based customer support FAQ agent
+│   │   ├── image_analyzer.py       # Visual content descriptor agent node
+│   │   ├── image_search.py         # Visual similarities lookups coordinator
+│   │   ├── order.py                # Order tracker and management agent node
+│   │   ├── summarizer.py           # Chats compaction & summarization node
+│   │   ├── supervisor.py           # Intents routing agent node (supervisor)
+│   │   └── synthesizer.py          # Unified responses synthesis node
 │   ├── db/
-│   │   ├── qdrant.py               # Qdrant client + collection setup
-│   │   ├── schema.sql              # Supabase database schema
-│   │   └── supabase.py             # Supabase client wrapper
+│   │   ├── __init__.py
+│   │   ├── customers.py            # Customer service table logic
+│   │   ├── qdrant.py               # Vector collections management client
+│   │   ├── schema.sql              # Supabase database table definitions
+│   │   └── supabase.py             # Supabase credentials loader
 │   ├── graph/
-│   │   ├── builder.py              # LangGraph state machine definition
-│   │   ├── checkpointer.py         # Dual Redis+Postgres checkpointer
-│   │   └── state.py                # Shared AgentState TypedDict
+│   │   ├── __init__.py
+│   │   ├── builder.py              # LangGraph compilation & workflow setup
+│   │   ├── checkpointer.py         # Postgres+Redis double buffer checkpointer
+│   │   ├── cleanup.py              # Cleanup intermediate state variables
+│   │   ├── state.py                # Core AgentState schema definition
+│   │   └── utils.py                # Graph message filtering helpers
 │   ├── middleware/
-│   │   └── auth.py                 # JWT authentication middleware
+│   │   ├── __init__.py
+│   │   ├── auth.py                 # Bearer JWT validator middleware
+│   │   └── rate_limit.py           # IP/user api rate limiting middleware
+│   ├── rag/
+│   │   ├── __init__.py
+│   │   ├── image_retriever.py      # SigLIP + BM25 hybrid search processor
+│   │   └── retriever.py            # Dense FAQ vector retriever processor
 │   ├── schemas/
-│   │   ├── agent.py                # Agent response schemas
-│   │   └── api.py                  # API request/response models
+│   │   ├── __init__.py
+│   │   ├── agent.py                # Internal agent API structures
+│   │   ├── api.py                  # Frontend REST controller schemas
+│   │   ├── order.py                # Order detail parsing templates
+│   │   └── search.py               # Search request mapping models
 │   ├── services/
-│   │   ├── auth.py                 # JWT generation + validation
-│   │   ├── azure_blob.py           # Azure Blob Storage upload
-│   │   ├── clip_embedder.py        # CLIP model inference wrapper
-│   │   ├── customers.py            # Customer lookup service
-│   │   ├── llm.py                  # LLM + Embedding factory with fallbacks
-│   │   ├── search.py               # Qdrant vector store wrapper
-│   │   └── token_tracker.py        # Token usage + cost tracking
-│   ├── tools/
-│   │   ├── faq_search.py           # FAQ semantic search tool
-│   │   ├── order_details.py        # Order details lookup tool
-│   │   ├── order_items.py          # Order items search tool
-│   │   └── order_lookup.py         # Order lookup by status/date tool
-│   └── main.py                     # FastAPI app entry point + lifespan
+│   │   ├── __init__.py
+│   │   ├── dense_embedder.py       # SigLIP embedding inference client
+│   │   ├── jwt_auth.py             # JWT token encoding & decoding
+│   │   ├── llm_factory.py          # Model initialization & fallback loader
+│   │   ├── sparse_embedder.py      # BM25 sparse vectors builder
+│   │   ├── storage_service.py      # Azure Blob storage uploads wrapper
+│   │   └── vision_service.py       # Azure Cognitive Vision integration
+│   └── tools/
+│       ├── __init__.py
+│       ├── faq_search.py           # Qdrant knowledge lookup search tool
+│       ├── order_details.py        # Order contents query backend tool
+│       ├── order_items.py          # Order details lookup sub-tool
+│       └── order_lookup.py         # Customer order index lookup tool
 ├── data/
-│   ├── customers.json              # Seed customer data
-│   └── orders.json                 # Seed order data
+│   ├── customers.json              # Sample customer profiles seed
+│   ├── orders.json                 # Sample purchases and tracking seed
+│   ├── products.json               # Enriched product database seed
+│   ├── summaries.log               # Live chat summarizer log output
+│   ├── token_usage.jsonl           # LLM API usage tracking data
+│   └── faq_knowledge/              # RAG FAQ content markdown database
+│       ├── faq_account.md          # User account creation & safety FAQs
+│       ├── faq_payment.md          # Checkout methods and payment policies
+│       ├── faq_returns.md          # Refund policies and item return procedures
+│       ├── faq_shipping.md         # Carrier details and international shipping FAQs
+│       └── faq_warranties.md       # Product warranty and claims procedures
 ├── ingestion/
-│   ├── faq_knowledge/              # Markdown knowledge base files
-│   │   ├── accounts.md
-│   │   ├── payments.md
-│   │   ├── returns.md
-│   │   ├── shipping.md
-│   │   └── warranties.md
-│   ├── create_checkpoint_tables.py # Postgres checkpoint table setup
-│   ├── index_catalog.py            # Product image → CLIP → Qdrant indexer
-│   ├── ingest_customers.py         # Seed customers into Supabase
-│   ├── ingest_faq.py               # FAQ chunks → embeddings → Qdrant
-│   └── ingest_orders.py            # Seed orders into Supabase
-├── ui/
-│   └── app.py                      # Streamlit chat frontend
-├── Dockerfile                      # Multi-stage Docker build
-├── start.sh                        # Container entrypoint (FastAPI + Streamlit)
-├── pyproject.toml                  # Python dependencies (uv)
-├── .env.example                    # Environment variable template
-└── README.md
+│   ├── __init__.py
+│   ├── create_checkpoint_tables.py # Postgres checkpointer setup script
+│   ├── index_catalog.py            # Product visual catalog indexing pipeline
+│   ├── ingest_customers.py         # Supabase customers table setup script
+│   ├── ingest_faq.py               # FAQ dense embedding indexing pipeline
+│   └── ingest_orders.py            # Supabase orders table setup script
+├── tests/
+│   ├── __init__.py
+│   └── evaluations/
+│       ├── __init__.py
+│       ├── custom_model.py         # Groq metric evaluator judge model
+│       ├── mock_dataset.py         # RAG evaluation groundtruth dataset
+│       └── test_faq_rag.py         # Faithfulness & relevancy test suites
+└── ui/
+    └── app.py                      # Streamlit interactive chat UI client
 ```
 
 ---
@@ -173,7 +202,7 @@ ecomm-cust-assit/
 - **Python 3.12+**
 - **[uv](https://docs.astral.sh/uv/)** (recommended) or pip
 - **Docker** (optional, for containerized runs)
-- API keys for: Groq, Google AI, Nomic, LangSmith
+- API keys for: Groq, Google AI, Nomic, Langfuse
 - Accounts on: Supabase, Qdrant Cloud, Redis Cloud
 
 ### 1. Clone the Repository
@@ -199,19 +228,34 @@ Edit `.env` and fill in all required values:
 
 | Variable | Description |
 |---|---|
-| `GOOGLE_API_KEY` | Google AI API key (for Gemini fallback LLM + embeddings) |
+| `GOOGLE_API_KEY` | Google AI API key (for Gemini fallback embeddings) |
 | `GROQ_API_KEY` | Groq API key (for primary LLM inference) |
-| `NOMIC_API_KEY` | Nomic API key (for primary text embeddings) |
+| `NOMIC_API_KEY` | Nomic API key (for optional text embeddings) |
+| `OPENAI_API_KEY` | OpenAI API key (for fallback LLM inference) |
+| `OPENAI_BASE_URL` | Optional base URL for OpenAI-compatible endpoints |
+| `OPENROUTER_API_KEY` | OpenRouter API key (for primary text embeddings) |
+| `OPENROUTER_EMBEDDING_MODEL` | OpenRouter embedding model name (e.g., `openai/text-embedding-3-small`) |
+| `PRIMARY_MODEL` | Primary LLM model identifier (e.g., `gpt-4o-mini`) |
+| `FALLBACK_MODEL` | Fallback LLM model identifier |
+| `EMBEDDING_MODEL` | Fallback embedding model identifier |
+| `NOMIC_EMBEDDING_MODEL` | Nomic embedding model identifier |
+| `CLIP_MODEL` | SigLIP/CLIP model path on Hugging Face |
 | `SUPABASE_URL` | Supabase project URL |
-| `SUPABASE_KEY` | Supabase anon/service key |
-| `SUPABASE_DB_URL` | Supabase Postgres connection string |
-| `REDIS_URL` | Redis connection URL (must support RediSearch) |
+| `SUPABASE_KEY` | Supabase service role / anon key |
+| `SUPABASE_DB_URL` | Supabase Postgres database connection string |
+| `REDIS_URL` | Redis connection string (for checkpoint caching) |
 | `QDRANT_URL` | Qdrant Cloud cluster URL |
 | `QDRANT_API_KEY` | Qdrant Cloud API key |
 | `AZURE_STORAGE_CONNECTION_STRING` | Azure Blob Storage connection string |
-| `AZURE_STORAGE_CONTAINER` | Azure Blob container name (e.g., `product-images`) |
+| `AZURE_STORAGE_CONTAINER` | Azure Blob container name |
+| `AZURE_VISION_ENDPOINT` | Azure Computer Vision endpoint |
+| `AZURE_VISION_KEY` | Azure Computer Vision key |
 | `JWT_SECRET_KEY` | Secret key for JWT token signing |
-| `LANGSMITH_API_KEY` | LangSmith API key for tracing |
+| `JWT_EXPIRATION_HOURS` | Token expiry duration in hours (default: `1`) |
+| `LANGFUSE_PUBLIC_KEY` | Langfuse public key |
+| `LANGFUSE_SECRET_KEY` | Langfuse secret key |
+| `LANGFUSE_BASE_URL` | Langfuse base service URL |
+| `HF_TOKEN` | Hugging Face access token (to load CLIP/SigLIP models) |
 
 ### 4. Set Up Local Services (Redis & Qdrant)
 
@@ -281,10 +325,19 @@ The project includes a fully automated CI/CD pipeline via GitHub Actions.
 
 | Secret | Description |
 |---|---|
-| `AZURE_CREDENTIALS` | Azure Service Principal credentials JSON |
+| `AZURE_CREDENTIALS` | Azure Service Principal credentials JSON (see below) |
 | `ACR_NAME` | Azure Container Registry name (without `.azurecr.io`) |
 | `ACA_APP_NAME` | Azure Container App name |
 | `ACA_RESOURCE_GROUP` | Azure Resource Group name |
+| `HF_TOKEN` | Hugging Face access token (required to download SigLIP model during Docker build) |
+
+**To generate your `AZURE_CREDENTIALS` JSON:**
+Run the following Azure CLI command in your terminal and paste the entire JSON output as the secret value:
+```bash
+az ad sp create-for-rbac --name "github-actions" --role contributor \
+  --scopes /subscriptions/<YOUR_SUBSCRIPTION_ID>/resourceGroups/<YOUR_RESOURCE_GROUP> \
+  --sdk-auth
+```
 
 #### Deploy
 
@@ -299,23 +352,6 @@ The GitHub Actions workflow will:
 2. Authenticate with Azure
 3. Build & push the Docker image to ACR
 4. Deploy the new image to Azure Container Apps
-
-#### Environment Variables in Azure
-
-Set all `.env` variables as **secrets** in Azure Container Apps → Configuration → Environment Variables.
-
-#### Manage the Container
-
-```bash
-# Scale down to zero (stop billing)
-az containerapp update --name <app-name> --resource-group <rg> --min-replicas 0 --max-replicas 0
-
-# Scale back up
-az containerapp update --name <app-name> --resource-group <rg> --min-replicas 0 --max-replicas 10
-
-# View live logs
-az containerapp logs show --name <app-name> --resource-group <rg> --follow
-```
 
 ---
 
@@ -391,13 +427,62 @@ Retrieve the full message history for a specific conversation.
 }
 ```
 
+#### `DELETE /chat/conversations/{conversation_id}`
+
+Delete a specific conversation from the history.
+
+**Response:**
+```json
+{
+  "status": "deleted"
+}
+```
+
 ---
 
-### Health Check
+### E-Commerce Core & Diagnostics
+
+All orders and products endpoints require the `Authorization: Bearer <token>` header.
+
+#### `GET /orders`
+
+Fetch the list of all orders belonging to the authenticated customer.
+
+**Response:**
+```json
+[
+  {
+    "id": "ord-1001",
+    "customer_id": "cust-abc",
+    "status": "shipped",
+    "payment_status": "paid",
+    "total": 21.87,
+    "ordered_at": "2026-06-07T15:30:00Z",
+    "items": [...]
+  }
+]
+```
+
+#### `GET /products`
+
+Fetch the complete product catalog.
+
+**Response:**
+```json
+[
+  {
+    "id": 1,
+    "title": "Fjallraven - Foldsack No. 1 Backpack",
+    "description": "Your perfect pack for everyday use...",
+    "price": 109.95,
+    "image": "https://..."
+  }
+]
+```
 
 #### `GET /health`
 
-Returns the health status of the API.
+Retrieve backend system health status.
 
 **Response:**
 ```json
@@ -408,38 +493,35 @@ Returns the health status of the API.
 
 ---
 
-## Data Ingestion
+## Evaluation (DeepEval)
 
-The `ingestion/` directory contains scripts to populate all data stores:
+This project uses **DeepEval** (Confident AI) to run test suites on the RAG pipeline.
 
-| Script | Target | Description |
-|---|---|---|
-| `ingest_customers.py` | Supabase | Seeds the `customers` table from `data/customers.json` |
-| `ingest_orders.py` | Supabase | Seeds the `orders` table from `data/orders.json` |
-| `ingest_faq.py` | Qdrant | Chunks FAQ markdown files, generates embeddings, and upserts into the `ecommerce-knowledge` collection |
-| `index_catalog.py` | Qdrant + Azure Blob | Downloads product images, uploads to Azure Blob Storage, generates CLIP embeddings, and indexes into the `product_images` collection |
+Run the test suite via the UV CLI:
+```bash
+uv run deepeval test run tests/evaluations/test_faq_rag.py
+```
+
+To see visual insights, tracking, and logs, you can log in to Confident AI:
+```bash
+uv run deepeval login
+```
 
 ---
 
 ## Observability
 
-This project is fully integrated with **LangSmith** for end-to-end tracing:
+This project is fully integrated with **Langfuse** for end-to-end tracing and LLM analytics. To enable tracing, configure the following environment variables:
+- `LANGFUSE_PUBLIC_KEY`
+- `LANGFUSE_SECRET_KEY`
+- `LANGFUSE_BASE_URL` (e.g. `https://us.cloud.langfuse.com`)
 
-- Every agent node is decorated with `@traceable` for automatic span creation
-- Token usage and estimated costs are logged per request via `TokenCostCallbackHandler`
-- Local token usage logs are written to `data/token_usage.jsonl`
+Key integrations include:
+- Every LangGraph node and tool is decorated with `@observe()` for automatic trace generation.
+- LLM inputs and outputs are captured automatically.
+- Token cost injection tracking.
 
-Visit your [LangSmith Dashboard](https://smith.langchain.com/) to view traces, latency breakdowns, and token consumption.
-
----
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/my-feature`)
-3. Commit your changes (`git commit -m 'feat: add my feature'`)
-4. Push to the branch (`git push origin feature/my-feature`)
-5. Open a Pull Request
+Visit your [Langfuse Dashboard](https://langfuse.com/) to view traces and metrics.
 
 ---
 

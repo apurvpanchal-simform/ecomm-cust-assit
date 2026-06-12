@@ -1,7 +1,7 @@
 import json
 import os
 from pathlib import Path
-import psycopg2
+import psycopg
 from dotenv import load_dotenv
 from supabase import create_client
 
@@ -21,8 +21,7 @@ def create_table_if_not_exists():
         return
 
     try:
-        conn = psycopg2.connect(SUPABASE_DB_URL)
-        conn.autocommit = True
+        conn = psycopg.connect(SUPABASE_DB_URL, autocommit=True)
         cursor = conn.cursor()
 
         create_sql = """
