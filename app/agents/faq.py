@@ -2,13 +2,13 @@ import os
 from typing import Any
 
 from dotenv import load_dotenv
-from langsmith import traceable
+from langfuse import observe
 from langchain_core.messages import AIMessage, SystemMessage
 from langchain_core.runnables import RunnableConfig
 from app.tools.faq_search import search_faq
 from app.graph.state import AgentState
 from app.graph.utils import filter_tool_messages
-from app.services.llm import get_llm
+from app.services.llm_factory import get_llm
 
 load_dotenv()
 
@@ -28,13 +28,36 @@ SYSTEM_PROMPT = """You are a FAQ support agent for an e-commerce platform. You a
 """
 
 
-@traceable(
-    name="faq_node",
-    metadata={
-        "agent": "faq",
-    },
-)
+@observe(name="faq_node")
 async def faq_node(state: AgentState, config: RunnableConfig) -> dict:
+    """
+    Handles user queries related to general platform questions, policies, and FAQs.
+
+    This node is part of the LangGraph multi-agent architecture and acts as the FAQ specialist. 
+    When the supervisor delegates a query to this node, it automatically searches the FAQ 
+    knowledge base using the provided sub-query or the original user query, and then formulates 
+    a response using only the retrieved context.
+
+    Flow:
+    1. Extracts the relevant query (`sub_query` or `query`) from the state.
+    2. Directly invokes the `search_faq` tool to retrieve relevant documentation.
+    3. Injects the retrieved context directly into the system prompt to prevent hallucination.
+    4. Constructs a conversation array consisting of the system prompt, chat summary, 
+       task instructions, retrieved context, and recent conversation history.
+    5. Invokes the LLM to generate an answer based purely on the context.
+    6. Appends the AI response to the state and marks the agent as executed.
+
+    Args:
+        state (AgentState): The global state of the conversation, containing history, 
+                            sub-queries, and execution tracking.
+        config (RunnableConfig): Configuration parameters for LangChain execution.
+
+    Returns:
+        dict: A dictionary containing:
+            - `messages`: A list containing the newly generated AIMessage.
+            - `error`: An error string if an exception occurred, otherwise None.
+            - `executed_agents`: The updated list of agents that have run in this turn.
+    """
 
     # In Sequential List without isolation, we just read all recent messages
     summarized_count = state.get("summarized_message_count", 0)

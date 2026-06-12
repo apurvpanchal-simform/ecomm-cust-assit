@@ -1,19 +1,18 @@
 import os
 from dotenv import load_dotenv
 from app.db.qdrant import get_qdrant_client, ensure_faq_collection
-from app.services.llm import get_embeddings
+from app.services.llm_factory import get_embeddings
 
 load_dotenv()
 
-
-class VectorStore:
+class FAQRetriever:
     def __init__(self):
         self.collection_name = "ecommerce-knowledge"
         self.client = get_qdrant_client()
         self.embeddings = get_embeddings()
 
-    async def initialize(self):
-        await ensure_faq_collection()
+    async def initialize(self, recreate: bool = False):
+        await ensure_faq_collection(recreate=recreate)
 
     async def vector_search(self, query: str, top_k: int = 3) -> list[dict]:
         """Search the vector store and return results with scores.

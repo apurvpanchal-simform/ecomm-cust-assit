@@ -28,3 +28,9 @@ venv/
 # Data
 *.jsonl
 *.log
+
+# DeepEval
+.deepeval/
+
+# Local Environment Variables
+.env.local

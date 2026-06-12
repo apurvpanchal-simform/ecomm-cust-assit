@@ -49,3 +49,17 @@ CREATE TABLE IF NOT EXISTS customer_conversations (
     title           TEXT,
     updated_at      TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
+
+-- ── Checkpoint State Logs (for Readable JSON History) ─────────────────────────
+CREATE TABLE IF NOT EXISTS checkpoint_state_logs (
+    id                   BIGSERIAL PRIMARY KEY,
+    conversation_id      TEXT NOT NULL,
+    checkpoint_id        TEXT NOT NULL,
+    parent_checkpoint_id TEXT,
+    step_node            TEXT,
+    state_values         JSONB NOT NULL,
+    metadata             JSONB,
+    created_at           TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_checkpoint_state_logs_conversation ON checkpoint_state_logs(conversation_id);

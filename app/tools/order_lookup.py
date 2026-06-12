@@ -3,7 +3,7 @@ Fetch all orders belonging to a customer, with optional status and date filterin
 """
 
 from typing import Optional, Annotated
-from langsmith import traceable
+from langfuse import observe
 
 from langchain_core.tools import tool, InjectedToolArg
 
@@ -16,7 +16,7 @@ from app.schemas.agent import ToolNotFoundResponse
 
 
 @tool
-@traceable(name="tool_get_customer_orders")
+@observe(name="tool_get_customer_orders")
 async def get_customer_orders(
     customer_id: Annotated[str, InjectedToolArg],
     status: Optional[str] = None,

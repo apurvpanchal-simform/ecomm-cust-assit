@@ -25,7 +25,7 @@ class AgentState(TypedDict, total=False):
     image_tags: list[str] | None
     image_embedding: list[float] | None
     image_is_safe: bool | None
-    visual_results: list[dict[str, Any]] | None
+    image_results: list[dict[str, Any]] | None
     active_filters: dict[str, Any] | None
     image_description: str | None
     search_query: str | None

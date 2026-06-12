@@ -3,7 +3,7 @@ Search across all order items for a customer by keyword.
 """
 
 from typing import Annotated
-from langsmith import traceable
+from langfuse import observe
 from langchain_core.tools import tool, InjectedToolArg
 
 from app.db.supabase import get_supabase_client
@@ -12,7 +12,7 @@ from app.schemas.agent import ToolNotFoundResponse
 
 
 @tool
-@traceable(name="tool_search_order_items")
+@observe(name="tool_search_order_items")
 async def search_order_items(
     customer_id: Annotated[str, InjectedToolArg], keyword: str
 ) -> dict:

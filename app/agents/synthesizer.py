@@ -1,8 +1,9 @@
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
 from langchain_core.runnables import RunnableConfig
 from app.graph.state import AgentState
-from langsmith import traceable
-from app.services.llm import get_llm
+from langfuse import observe
+from app.services.llm_factory import get_llm
+from app.graph.utils import filter_tool_messages
 import logging
 
 logger = logging.getLogger(__name__)
@@ -20,9 +21,35 @@ Merge all agent responses into one cohesive, natural reply for the user.
 """
 
 
-@traceable(name="synthesizer_node")
+@observe(name="synthesizer_node")
 async def synthesizer_node(state: AgentState, config: RunnableConfig) -> dict:
-    """Synthesizes multiple agent responses into a single, cohesive response."""
+    """
+    Synthesizes multiple agent responses into a single, cohesive response.
+
+    This node acts as the final step in a multi-agent conversation turn before summarization. 
+    It evaluates the AI messages generated in the current turn. If multiple sub-agents 
+    (e.g., FAQ and Order) were triggered by the supervisor, this node takes their disparate 
+    responses and uses an LLM to merge them into a single, natural, and helpful reply for the user.
+
+    Flow:
+    1. Identifies the last human message in the state to isolate the current conversation turn.
+    2. Collects all AI messages generated after that human message, filtering out tool calls.
+    3. Excludes the supervisor's routing/greeting message from the agent count to accurately 
+       determine if multiple sub-agents ran.
+    4. If 1 or 0 sub-agents ran, it skips synthesis and returns an empty dict (allowing the 
+       single agent's message to be presented directly to the user).
+    5. If multiple sub-agents ran, it constructs a prompt containing all their raw responses 
+       and invokes the LLM to generate a unified response.
+    6. Appends the newly synthesized message to the state, tagged with `name="synthesizer"`.
+
+    Args:
+        state (AgentState): The global state of the LangGraph containing the conversation history.
+        config (RunnableConfig): Configuration parameters for the LangChain execution.
+
+    Returns:
+        dict: A dictionary containing the newly synthesized `messages` to append to the state, 
+              or an empty dictionary if synthesis is skipped.
+    """
     messages = state.get("messages", [])
 
     # Find the last human message
@@ -35,15 +62,20 @@ async def synthesizer_node(state: AgentState, config: RunnableConfig) -> dict:
     if last_human_idx == -1:
         return {}
 
-    # Get all AI messages generated AFTER the last human message that don't have tool calls
+
+    current_turn_messages = messages[last_human_idx + 1 :]
+    filtered_turn_messages = filter_tool_messages(current_turn_messages)
+
+    # Get all AI messages generated AFTER the last human message
     new_ai_messages = [
-        m
-        for m in messages[last_human_idx + 1 :]
-        if hasattr(m, "type") and m.type == "ai" and not getattr(m, "tool_calls", None)
+        m for m in filtered_turn_messages if hasattr(m, "type") and m.type == "ai"
     ]
 
-    # Only synthesize if there are multiple responses
-    if len(new_ai_messages) <= 1:
+    # Exclude supervisor messages from the count so that 1 agent + 1 supervisor = 1 agent response
+    agent_responses = [m for m in new_ai_messages if getattr(m, "name", "") != "supervisor"]
+
+    # Only synthesize if there are multiple agent responses
+    if len(agent_responses) <= 1:
         return {}
 
     try:

@@ -1,8 +1,8 @@
 from typing import Any
-from langsmith import traceable
+from langfuse import observe
 
 
-@traceable(name="cleanup_node")
+@observe(name="cleanup_node")
 async def cleanup_node(state: Any) -> dict:
     """Lightweight node that clears heavy transient fields to keep checkpoints lean.
     Runs unconditionally after the visual search pipeline finishes.
@@ -10,7 +10,7 @@ async def cleanup_node(state: Any) -> dict:
     return {
         "image_base64": None,
         "image_embedding": None,
-        "visual_results": None,
+        "image_results": None,
         "image_tags": None,
         "image_azure_url": None,
         "image_is_safe": None,
