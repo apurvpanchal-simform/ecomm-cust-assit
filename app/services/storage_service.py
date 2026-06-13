@@ -1,9 +1,20 @@
-import os
+"""
+Azure Blob Storage service integration for hosting product images.
+"""
+
 import logging
+import os
+
 from azure.storage.blob import BlobServiceClient
 
 
 def get_blob_service_client():
+    """
+    Initializes and returns an Azure BlobServiceClient using the configured connection string.
+
+    Returns:
+        A BlobServiceClient instance.
+    """
     connection_string = os.environ.get("AZURE_STORAGE_CONNECTION_STRING")
     if not connection_string or connection_string.startswith(
         "DefaultEndpointsProtocol=https;AccountName=..."
@@ -15,6 +26,12 @@ def get_blob_service_client():
 
 
 def get_container_name():
+    """
+    Retrieves the target Azure storage container name from environment variables.
+
+    Returns:
+        The container name string.
+    """
     return os.environ.get("AZURE_STORAGE_CONTAINER", "product-images")
 
 

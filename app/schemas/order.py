@@ -1,5 +1,10 @@
-from pydantic import BaseModel
+"""
+Pydantic schemas for order representations, items, and search responses.
+"""
+
 from datetime import datetime
+
+from pydantic import BaseModel
 
 # ── Summary (used by get_customer_orders / filter) ────────────────────
 
@@ -8,12 +13,20 @@ class OrderSummary(BaseModel):
     order_id: str
     status: str
     payment_status: str
+    subtotal: float
+    shipping_cost: float
+    tax: float
     total_amount: float
     ordered_at: datetime
+    tracking_number: str | None = None
     carrier: str | None = None
     estimated_delivery: datetime | None = None
     delivered_at: datetime | None = None
     return_eligible: bool
+    return_deadline: datetime | None = None
+    payment: dict | None = None
+    shipment: dict | None = None
+    notes: str | None = None
 
 
 class CustomerOrdersResponse(BaseModel):
@@ -31,8 +44,10 @@ class OrderItem(BaseModel):
     product_id: str | None = None
     quantity: int | None = None
     price: float | None = None
-    image_url: str | None = None
+    image: str | None = None
     variant: str | None = None
+    color: str | None = None
+    size: str | None = None
 
 
 class OrderDetail(BaseModel):

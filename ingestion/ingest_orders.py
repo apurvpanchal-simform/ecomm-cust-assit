@@ -1,10 +1,17 @@
+"""
+Script to seed the Supabase database with sample orders.
+Dynamically shifts timestamps to make the data appear fresh.
+"""
+
 import json
 import os
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
+
 from dateutil import parser
-import psycopg
 from dotenv import load_dotenv
-from supabase import create_client, Client
+from supabase import Client, create_client
+
+from ingestion.utils import setup_database_schema
 
 load_dotenv()
 
@@ -13,47 +20,6 @@ SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 SUPABASE_DB_URL = os.getenv("SUPABASE_DB_URL")
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
-
-
-def create_table_if_not_exists():
-    """Ensure the orders table exists before ingestion."""
-    if not SUPABASE_DB_URL:
-        print("Warning: SUPABASE_DB_URL not set. Skipping table creation.")
-        return
-
-    try:
-        conn = psycopg.connect(SUPABASE_DB_URL, autocommit=True)
-        cursor = conn.cursor()
-
-        create_sql = """
-        CREATE TABLE IF NOT EXISTS orders (
-            id TEXT PRIMARY KEY,
-            customer_id TEXT,
-            items JSONB,
-            subtotal NUMERIC,
-            shipping_cost NUMERIC,
-            tax NUMERIC,
-            total NUMERIC,
-            status TEXT,
-            payment_status TEXT,
-            payment JSONB,
-            carrier TEXT,
-            shipment JSONB,
-            ordered_at TIMESTAMP WITH TIME ZONE,
-            estimated_delivery TIMESTAMP WITH TIME ZONE,
-            delivered_at TIMESTAMP WITH TIME ZONE,
-            return_eligible BOOLEAN,
-            return_deadline TIMESTAMP WITH TIME ZONE,
-            notes TEXT
-        );
-        """
-        cursor.execute(create_sql)
-        cursor.execute("NOTIFY pgrst, 'reload schema'")
-        cursor.close()
-        conn.close()
-        print("Table 'orders' ensured and schema cache reloaded.")
-    except Exception as e:
-        print(f"Database setup error: {e}")
 
 
 def shift_timestamps(orders):
@@ -95,7 +61,11 @@ def shift_timestamps(orders):
 
 
 def seed_orders():
-    create_table_if_not_exists()
+    """
+    Reads orders.json, shifts all dates so the latest order is exactly 1 day old,
+    attaches product images to order items, and upserts them into Supabase.
+    """
+    setup_database_schema()
 
     # Fetch product images to attach to order items
     products_response = (
@@ -117,7 +87,6 @@ def seed_orders():
         batch = orders[i : i + batch_size]
         for order in batch:
             order.pop("partition_key", None)
-            order.pop("tracking_number", None)
 
             for item in order.get("items", []):
                 pid = str(item.get("product_id"))

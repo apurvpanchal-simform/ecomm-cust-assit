@@ -1,21 +1,18 @@
 import logging
-import os
-from langchain_groq import ChatGroq
-from app.db.qdrant import get_qdrant_client
+
 from qdrant_client.models import (
-    Filter,
     FieldCondition,
-    Range,
-    Prefetch,
-    FusionQuery,
+    Filter,
     Fusion,
+    FusionQuery,
+    Prefetch,
+    Range,
     SparseVector,
 )
-from app.services.llm_factory import get_llm
+
+from app.db.qdrant import get_qdrant_client
 from app.services.dense_embedder import embed_text
 from app.services.sparse_embedder import embed_sparse_text
-from langchain_core.messages import SystemMessage
-from app.schemas.search import RerankResponse
 
 logger = logging.getLogger(__name__)
 
@@ -59,13 +56,15 @@ class ImageRetriever:
         image_vector = image_embedding
         text_vector = None
         sparse_vector = None
-        
+
         try:
             text_vector = embed_text(search_query)
             if image_tags:
                 tags_text = " ".join(image_tags)
                 combined_text = f"{search_query} {tags_text}"
-                logger.info(f"Using Image Tags + Query for Sparse Keyword Search: {combined_text}")
+                logger.info(
+                    f"Using Image Tags + Query for Sparse Keyword Search: {combined_text}"
+                )
                 sparse_vector = embed_sparse_text(combined_text)
             else:
                 sparse_vector = embed_sparse_text(search_query)
@@ -128,13 +127,15 @@ class ImageRetriever:
                         using="",
                         limit=5,
                         query_filter=filters,
-                        with_payload=True
+                        with_payload=True,
                     )
                     log_msg = "\n=== 🖼️ DENSE IMAGE RESULTS ===\n"
                     if not res_img.points:
                         log_msg += "No image results found.\n"
                     for idx, p in enumerate(res_img.points, 1):
-                        log_msg += f"{idx}. {p.payload.get('title')} (score: {p.score:.4f})\n"
+                        log_msg += (
+                            f"{idx}. {p.payload.get('title')} (score: {p.score:.4f})\n"
+                        )
                     logger.info(log_msg)
                 except Exception as e:
                     logger.warning(f"Failed to log image results: {e}")
@@ -147,13 +148,15 @@ class ImageRetriever:
                         using="",
                         limit=5,
                         query_filter=filters,
-                        with_payload=True
+                        with_payload=True,
                     )
                     log_msg = "\n=== 📝 DENSE TEXT RESULTS ===\n"
                     if not res_txt.points:
                         log_msg += "No dense text results found.\n"
                     for idx, p in enumerate(res_txt.points, 1):
-                        log_msg += f"{idx}. {p.payload.get('title')} (score: {p.score:.4f})\n"
+                        log_msg += (
+                            f"{idx}. {p.payload.get('title')} (score: {p.score:.4f})\n"
+                        )
                     logger.info(log_msg)
                 except Exception as e:
                     logger.warning(f"Failed to log text results: {e}")
@@ -166,13 +169,15 @@ class ImageRetriever:
                         using="text",
                         limit=5,
                         query_filter=filters,
-                        with_payload=True
+                        with_payload=True,
                     )
                     log_msg = "\n=== 🔑 SPARSE TEXT (BM25) RESULTS ===\n"
                     if not res_sparse.points:
                         log_msg += "No sparse results found.\n"
                     for idx, p in enumerate(res_sparse.points, 1):
-                        log_msg += f"{idx}. {p.payload.get('title')} (score: {p.score:.4f})\n"
+                        log_msg += (
+                            f"{idx}. {p.payload.get('title')} (score: {p.score:.4f})\n"
+                        )
                     logger.info(log_msg)
                 except Exception as e:
                     logger.warning(f"Failed to log sparse results: {e}")

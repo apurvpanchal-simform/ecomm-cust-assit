@@ -1,11 +1,17 @@
-import os
-import logging
-from dotenv import load_dotenv
+"""
+Factory functions for generating LLM and Embedding models with fallback chains.
+"""
 
-load_dotenv()
+import logging
+import os
+
+from dotenv import load_dotenv
+from langchain_core.embeddings import Embeddings
+from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from langchain_groq import ChatGroq
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
-from langchain_google_genai import GoogleGenerativeAIEmbeddings
+
+load_dotenv()
 
 logger = logging.getLogger(__name__)
 
@@ -17,7 +23,7 @@ def estimate_tokens(texts) -> int:
     return sum(max(1, len(t) // 4) for t in texts)
 
 
-class FallbackEmbeddings:
+class FallbackEmbeddings(Embeddings):
     """A simple wrapper to fallback to a secondary embedding model on failure."""
 
     def __init__(self, primary, fallback, primary_name: str, fallback_name: str):
@@ -63,14 +69,17 @@ class FallbackEmbeddings:
             return res
 
 
-def get_llm(temperature=0.0):
-    """Returns OpenAI/Groq models with fallbacks as requested."""
+def get_llm(temperature=0.0, cache: bool = True):
+    """Returns OpenAI/Groq models with fallbacks as requested.
+
+    Args:
+        temperature: Sampling temperature for generation.
+        cache: Set to False to disable the global LLM cache for this call chain.
+               Use False for agents that fetch live, user-specific data (e.g., Order agent).
+    """
 
     oss_20b_llm = ChatGroq(
-        model="openai/gpt-oss-20b", 
-        temperature=temperature, 
-        max_retries=2, 
-        timeout=15.0
+        model="openai/gpt-oss-20b", temperature=temperature, max_retries=2, timeout=15.0, cache=cache
     )
 
     gpt4o_mini_llm = ChatOpenAI(
@@ -80,6 +89,7 @@ def get_llm(temperature=0.0):
         temperature=temperature,
         max_retries=1,
         timeout=15.0,
+        cache=cache,
     )
 
     oss_120b_llm = ChatGroq(
@@ -87,6 +97,7 @@ def get_llm(temperature=0.0):
         temperature=temperature,
         max_retries=2,
         timeout=15.0,
+        cache=cache,
     )
 
     # Queue: primary (20b) -> fallback 1 (4o-mini) -> fallback 2 (120b)
@@ -94,23 +105,25 @@ def get_llm(temperature=0.0):
 
 
 def get_embeddings():
-    """Returns OpenAI text-embedding-3-large embeddings with Gemini fallback."""
-    primary_name = os.getenv("OPENAI_EMBEDDING_MODEL", "text-embedding-3-large")
+    """Returns OpenRouter text-embedding-3-small embeddings with Gemini fallback."""
+    primary_name = os.getenv(
+        "OPENROUTER_EMBEDDING_MODEL", "openai/text-embedding-3-small"
+    )
     fallback_name = os.getenv("EMBEDDING_MODEL", "models/gemini-embedding-2")
 
-    primary_embeddings = OpenAIEmbeddings(
-        model=os.getenv("OPENROUTER_EMBEDDING_MODEL", "openai/text-embedding-3-small"),
+    openrouter_embeddings = OpenAIEmbeddings(
+        model=primary_name,
         dimensions=1024,
-        api_key=os.getenv("OPENROUTER_API_KEY", os.getenv("OPENAI_API_KEY")),
-        base_url="https://openrouter.ai/api/v1"
+        api_key=os.getenv("OPENROUTER_API_KEY"),
+        base_url="https://openrouter.ai/api/v1",
     )
-    
+
     gemini_embeddings = GoogleGenerativeAIEmbeddings(
         model=fallback_name, output_dimensionality=768
     )
 
     return FallbackEmbeddings(
-        primary=primary_embeddings,
+        primary=openrouter_embeddings,
         fallback=gemini_embeddings,
         primary_name=primary_name,
         fallback_name=fallback_name,

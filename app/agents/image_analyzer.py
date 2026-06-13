@@ -1,9 +1,10 @@
-from typing import Any
+import logging
+
+from langchain_core.messages import SystemMessage
 from langfuse import observe
+
 from app.graph.state import AgentState
 from app.services.vision_service import analyze_image_base64
-from langchain_core.messages import SystemMessage
-import logging
 
 logger = logging.getLogger(__name__)
 
@@ -13,9 +14,9 @@ async def image_analyzer_node(state: AgentState) -> dict:
     """
     Pre-processes user-uploaded images using Azure AI Vision before they reach the supervisor.
 
-    This node acts as a middleware step at the very beginning of the LangGraph execution. 
-    If an image is detected in the global state, this node extracts descriptive features 
-    (tags and OCR text) to provide textual context for downstream agents. It also implements 
+    This node acts as a middleware step at the very beginning of the LangGraph execution.
+    If an image is detected in the global state, this node extracts descriptive features
+    (tags and OCR text) to provide textual context for downstream agents. It also implements
     safety mechanisms to block NSFW or dangerous content.
 
     Flow:
@@ -23,8 +24,8 @@ async def image_analyzer_node(state: AgentState) -> dict:
     2. Calls the Azure Vision service to analyze the image.
     3. Extracts generated tags and OCR text (if any) and formats them into a descriptive string.
     4. Evaluates the extracted tags against a predefined list of `UNSAFE_TAGS`.
-    5. If an unsafe tag is found, it nullifies the image data and injects a SystemMessage 
-       warning downstream agents about the safety violation, prompting them to politely decline 
+    5. If an unsafe tag is found, it nullifies the image data and injects a SystemMessage
+       warning downstream agents about the safety violation, prompting them to politely decline
        the image while answering the textual part of the query.
     6. If the image is safe, it updates the state with `image_tags` and `image_description`.
 
@@ -32,7 +33,7 @@ async def image_analyzer_node(state: AgentState) -> dict:
         state (AgentState): The global state of the conversation containing `image_base64`.
 
     Returns:
-        dict: A dictionary containing the `image_tags` and `image_description` to merge into 
+        dict: A dictionary containing the `image_tags` and `image_description` to merge into
               the state. If a safety violation occurs, returns empty image data and a warning message.
     """
 

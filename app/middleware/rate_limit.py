@@ -1,11 +1,31 @@
-from fastapi import Depends, Request, HTTPException
+"""
+Rate limiting middleware for the chat API.
+"""
+
+from fastapi import Depends, HTTPException, Request
+
 from app.middleware.auth import get_current_customer
 
 
 async def rate_limit_customer(
-    request: Request, customer_id: str = Depends(get_current_customer)
+    request: Request,
+    customer_id: str = Depends(get_current_customer),
 ) -> str:
-    """Rate limit to 10 requests per minute per customer."""
+    """
+    FastAPI dependency to enforce rate limiting on chat requests.
+
+    Limits each customer to a specific number of requests per minute using Redis.
+
+    Args:
+        request: The FastAPI request object.
+        customer_id: The authenticated customer ID.
+
+    Returns:
+        The customer ID if the rate limit has not been exceeded.
+
+    Raises:
+        HTTPException: If the customer has exceeded the rate limit.
+    """
     redis_client = getattr(request.app.state, "redis", None)
     if not redis_client:
         return customer_id

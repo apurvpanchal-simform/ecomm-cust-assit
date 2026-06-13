@@ -30,3 +30,5 @@ class AgentState(TypedDict, total=False):
     image_description: str | None
     search_query: str | None
     sub_queries: dict[str, str] | None
+    # FAQ specific fields
+    faq_chunks: list[dict[str, Any]] | None

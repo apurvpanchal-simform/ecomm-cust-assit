@@ -1,14 +1,18 @@
-import os
+"""
+The Supervisor agent node that routes user queries to the appropriate downstream agents.
+"""
+
 import logging
+
 from dotenv import load_dotenv
-from langfuse import observe
-from langchain_core.messages import SystemMessage, AIMessage
+from langchain_core.messages import AIMessage, SystemMessage
 from langchain_core.runnables import RunnableConfig
-from app.services.llm_factory import get_llm
+from langfuse import observe
 
 from app.graph.state import AgentState
 from app.graph.utils import filter_tool_messages
 from app.schemas.agent import Route
+from app.services.llm_factory import get_llm
 
 load_dotenv()
 
@@ -42,7 +46,22 @@ A downstream synthesizer will merge all agent responses with your `response` fie
 
 @observe(name="supervisor_node")
 async def supervisor_node(state: AgentState, config: RunnableConfig) -> dict:
-    """Delegates to the correct agent or finishes the conversation."""
+    """
+    Analyzes the conversation state and delegates work to specific agents.
+
+    This node reads the user's latest messages, chat history summary, and any
+    extracted image metadata. It then invokes an LLM using Structured Outputs
+    to generate a routing plan (`Route`), which includes a list of pending agents,
+    sub-queries for those agents, and search filters.
+
+    Args:
+        state: The global AgentState.
+        config: The RunnableConfig containing thread execution context.
+
+    Returns:
+        A dictionary representing updates to the AgentState, primarily setting
+        `pending_agents` and `sub_queries`.
+    """
 
     messages = state.get("messages", [])
 
@@ -72,13 +91,17 @@ async def supervisor_node(state: AgentState, config: RunnableConfig) -> dict:
             analysis_text.append(f"Tags: {', '.join(image_tags)}")
         supervisor_messages.append(
             SystemMessage(
-                content=f"The user uploaded an image. Image Analysis:\n"
+                content="The user uploaded an image. Image Analysis:\n"
                 + "\n".join(analysis_text)
             )
         )
 
     summarized_count = state.get("summarized_message_count", 0)
     recent_messages = filter_tool_messages(messages[summarized_count:])
+
+    customer_id = state.get("customer_id", "guest")
+    supervisor_messages.append(SystemMessage(content=f"Current Customer ID: {customer_id}"))
+
     if recent_messages:
         supervisor_messages.append(
             SystemMessage(content="Latest Conversation (Highest priority):")
@@ -134,6 +157,8 @@ async def supervisor_node(state: AgentState, config: RunnableConfig) -> dict:
             "error": None,
             "next": "FINISH",
             "messages": [AIMessage(content=response_text)],
+            "faq_chunks": [],
+            "image_results": [],
         }
 
     next_step = pending_str[0] if pending_str else "FINISH"
@@ -152,6 +177,8 @@ async def supervisor_node(state: AgentState, config: RunnableConfig) -> dict:
         "active_filters": active_filters if active_filters else None,
         "error": None,
         "next": next_step,
+        "faq_chunks": [],
+        "image_results": [],
     }
 
     if response_text and pending_str:

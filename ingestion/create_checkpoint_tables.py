@@ -1,16 +1,32 @@
+"""
+Utility script to manually create and reset Postgres checkpoint tables for LangGraph.
+"""
+
 import os
+
 import psycopg
 from dotenv import load_dotenv
 from langgraph.checkpoint.postgres import PostgresSaver
 
 
 def main():
+    """
+    Connects to the Supabase Postgres instance via psycopg and forces the creation
+    of LangGraph checkpoint tables by dropping any corrupted migration state.
+    """
     load_dotenv()
     db_url = os.getenv("SUPABASE_DB_URL")
 
     if not db_url:
         print("Error: SUPABASE_DB_URL is not set.")
         return
+
+    import sys
+
+    sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    from ingestion.utils import setup_database_schema
+
+    setup_database_schema()
 
     print("Connecting to Supabase to create checkpoint tables...")
 

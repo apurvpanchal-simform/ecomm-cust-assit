@@ -1,4 +1,9 @@
+"""
+Graph node for cleaning up transient state to reduce checkpoint payload sizes.
+"""
+
 from typing import Any
+
 from langfuse import observe
 
 

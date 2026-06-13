@@ -1,16 +1,20 @@
+"""
+Agent node for handling order lookups, item searches, and specific order tracking.
+"""
+
 import os
 from typing import Any
 
 from dotenv import load_dotenv
-from langfuse import observe
 from langchain_core.messages import AIMessage, SystemMessage, ToolMessage
 from langchain_core.runnables import RunnableConfig
+from langfuse import observe
 
-from app.tools.order_lookup import get_customer_orders
+from app.graph.state import AgentState
+from app.services.llm_factory import get_llm
 from app.tools.order_details import get_order_details
 from app.tools.order_items import search_order_items
-from app.services.llm_factory import get_llm
-from app.graph.state import AgentState
+from app.tools.order_lookup import get_customer_orders
 
 load_dotenv()
 
@@ -45,6 +49,7 @@ Never for: listing orders, tracking, returns, or single-order details.
 5. If the needed data is already in the conversation summary, use it directly without a duplicate tool call.
 6. If you receive a "specific task for this turn", prioritize that task over unrelated conversation.
 7. Be concise, thorough, and friendly.
+8. NEVER use inline code (backticks `) to format labels or monetary amounts (e.g., do NOT write `Subtotal: \`$10\`` or `\`**Tax**\``). Use standard bold text instead.
 """
 
 
@@ -55,7 +60,25 @@ async def generate_order_response(
     config: RunnableConfig,
     customer_id: str,
 ) -> tuple[str, list, str | None]:
+    """
+    Executes a LangChain agent loop to invoke database tools and answer order queries.
 
+    Iteratively runs the LLM and processes its tool calls until it successfully
+    generates a final text response without invoking further tools, or hits the
+    maximum iteration limit.
+
+    Args:
+        agent: The compiled LangChain runnable bound to order tools.
+        conversation: The list of LangChain messages acting as the prompt/context.
+        config: The execution configuration.
+        customer_id: The authenticated customer's ID to inject into tool calls.
+
+    Returns:
+        A tuple containing:
+            - The final generated string response.
+            - A list of all newly generated messages (AI messages and Tool messages).
+            - An error string if the loop timed out, else None.
+    """
     new_messages = []
 
     max_iters = int(os.getenv("MAX_ITERATIONS", "6"))
@@ -115,25 +138,25 @@ async def order_node(state: AgentState, config: RunnableConfig) -> dict:
     """
     Handles user queries related to their personal order history and tracking.
 
-    This node is part of the LangGraph multi-agent architecture and acts as the Order specialist. 
-    It leverages tools to query a Supabase database for order information, specific item details, 
+    This node is part of the LangGraph multi-agent architecture and acts as the Order specialist.
+    It leverages tools to query a Supabase database for order information, specific item details,
     and delivery tracking.
 
     Flow:
-    1. Validates the presence of `customer_id` in the state (injected by authentication middleware). 
+    1. Validates the presence of `customer_id` in the state (injected by authentication middleware).
        If missing, aborts and returns an error message requesting login.
-    2. Constructs a conversation array containing the system prompt, chat summary, specific task 
+    2. Constructs a conversation array containing the system prompt, chat summary, specific task
        instructions from the supervisor, and the recent conversation history.
     3. Binds the necessary Supabase DB tools to the LLM.
-    4. Enters a tool-calling loop (`generate_order_response`) where the LLM can iteratively invoke 
-       tools (e.g., getting all orders, then getting details for a specific order) until it has 
+    4. Enters a tool-calling loop (`generate_order_response`) where the LLM can iteratively invoke
+       tools (e.g., getting all orders, then getting details for a specific order) until it has
        gathered enough information to answer the user's query.
-    5. Formats the final AI response, tags it with `name="order"`, and appends all intermediate 
+    5. Formats the final AI response, tags it with `name="order"`, and appends all intermediate
        tool messages and the final response to the state.
     6. Marks the `order` agent as executed.
 
     Args:
-        state (AgentState): The global state of the conversation, containing authentication data, 
+        state (AgentState): The global state of the conversation, containing authentication data,
                             history, and sub-queries.
         config (RunnableConfig): Configuration parameters for LangChain execution.
 
@@ -160,6 +183,7 @@ async def order_node(state: AgentState, config: RunnableConfig) -> dict:
     recent_messages = state.get("messages", [])[summarized_count:]
 
     conversation = [SystemMessage(content=SYSTEM_PROMPT)]
+    conversation.append(SystemMessage(content=f"Current Customer ID: {customer_id}"))
 
     chat_summary = state.get("chat_summary", "")
     if chat_summary:
@@ -176,7 +200,7 @@ async def order_node(state: AgentState, config: RunnableConfig) -> dict:
 
     conversation += recent_messages
 
-    llm = get_llm(temperature=0.1)
+    llm = get_llm(temperature=0.1, cache=False)  # Never cache — fetches live user-specific DB data
     agent = llm.bind_tools(_ORDER_TOOLS)
 
     try:
@@ -198,8 +222,6 @@ async def order_node(state: AgentState, config: RunnableConfig) -> dict:
             new_messages[final_ai_idx] = AIMessage(
                 content=new_messages[final_ai_idx].content, name="order"
             )
-
-        final_resolution_text = resolution_text
 
     except Exception as exc:
         resolution_text = "I encountered an error while trying to process your order. Please try again."

@@ -3,24 +3,25 @@ Run once to index all product images into Qdrant.
 Usage: python ingestion/index_catalog.py
 """
 
-import requests
-from qdrant_client.models import PointStruct
 import asyncio
 import os
 import sys
-import uuid
+
+import requests
 from dotenv import load_dotenv
+from qdrant_client.models import PointStruct
 
 # Ensure app is in path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from app.db.qdrant import get_qdrant_client, ensure_product_images_collection
+from supabase import create_client
+
+from app.db.qdrant import ensure_product_images_collection, get_qdrant_client
 from app.services.dense_embedder import embed_image_bytes
 from app.services.sparse_embedder import embed_sparse_text
 
 # from app.services.vision_service import vectorize_image_bytes
 from app.services.storage_service import upload_product_image
-from supabase import create_client
 
 load_dotenv(override=True)
 
@@ -29,6 +30,14 @@ qdrant = get_qdrant_client()
 
 
 async def index_all_products():
+    """
+    Fetches all products from Supabase, generates multimodal dense and sparse embeddings,
+    uploads images to Azure Blob Storage, and indexes the vectors and payloads into Qdrant.
+    """
+    from ingestion.utils import setup_database_schema
+
+    setup_database_schema()
+
     # Recreate collection to match the new 1152 dimensions of SigLIP2
     await ensure_product_images_collection(recreate=True)
 
@@ -91,7 +100,7 @@ async def index_all_products():
             await qdrant.upsert(
                 collection_name="product_images", points=points[i : i + 100]
             )
-            print(f"✅ Indexed {min(i+100, len(points))}/{len(points)}")
+            print(f"✅ Indexed {min(i + 100, len(points))}/{len(points)}")
     else:
         print("No points to index.")
 

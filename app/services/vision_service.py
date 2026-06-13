@@ -1,15 +1,26 @@
-import os
+"""
+Azure AI Vision service integration for image analysis and vectorization.
+"""
+
+import base64
 import logging
+import os
+
+import requests
 from azure.ai.vision.imageanalysis import ImageAnalysisClient
 from azure.ai.vision.imageanalysis.models import VisualFeatures
 from azure.core.credentials import AzureKeyCredential
-import base64
-import requests
 
 logger = logging.getLogger(__name__)
 
 
 def get_vision_client() -> ImageAnalysisClient | None:
+    """
+    Initializes and returns an Azure ImageAnalysisClient using environment credentials.
+
+    Returns:
+        The client instance, or None if credentials are not configured.
+    """
     endpoint = os.getenv("AZURE_VISION_ENDPOINT")
     key = os.getenv("AZURE_VISION_KEY")
     if not endpoint or not key:
@@ -60,9 +71,6 @@ def analyze_image_bytes(image_bytes: bytes) -> dict:
 
 def analyze_image_base64(b64_str: str) -> dict:
     return analyze_image_bytes(base64.b64decode(b64_str))
-
-
-
 
 
 def vectorize_image_bytes(image_bytes: bytes) -> list[float]:

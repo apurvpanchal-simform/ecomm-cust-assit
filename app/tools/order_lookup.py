@@ -2,17 +2,17 @@
 Fetch all orders belonging to a customer, with optional status and date filtering.
 """
 
-from typing import Optional, Annotated
+from typing import Annotated, Optional
+
+from langchain_core.tools import InjectedToolArg, tool
 from langfuse import observe
 
-from langchain_core.tools import tool, InjectedToolArg
-
 from app.db.supabase import get_supabase_client
-from app.schemas.order import (
-    OrderSummary,
-    CustomerOrdersResponse,
-)
 from app.schemas.agent import ToolNotFoundResponse
+from app.schemas.order import (
+    CustomerOrdersResponse,
+    OrderSummary,
+)
 
 
 @tool
@@ -29,8 +29,8 @@ async def get_customer_orders(
 
     Args:
         customer_id: Unique customer identifier (injected automatically).
-        status: Optional order status filter (e.g. "delivered", "shipped",
-                "processing", "cancelled").
+        status: Optional order status filter (e.g. "placed", "processing", "shipped",
+                "in_transit", "delivered", "cancelled").
         from_date: Optional ISO-8601 start date to filter orders placed on or
                    after this date (e.g. "2026-01-01").
         to_date: Optional ISO-8601 end date to filter orders placed on or
@@ -42,19 +42,32 @@ async def get_customer_orders(
     """
     supabase = await get_supabase_client()
 
-    query = supabase.table("orders").select("""
+    query = (
+        supabase.table("orders")
+        .select("""
             id,
             status,
             payment_status,
+            subtotal,
+            shipping_cost,
+            tax,
             total,
             ordered_at,
+            tracking_number,
             carrier,
             estimated_delivery,
             delivered_at,
-            return_eligible
-            """).eq("customer_id", customer_id)
+            return_eligible,
+            return_deadline,
+            payment,
+            shipment,
+            notes
+            """)
+        .eq("customer_id", customer_id)
+    )
 
     if status:
+        status = status.replace("-", "_").lower()
         query = query.eq("status", status)
     if from_date:
         query = query.gte("ordered_at", from_date)
@@ -78,12 +91,20 @@ async def get_customer_orders(
             order_id=row["id"],
             status=row["status"],
             payment_status=row["payment_status"],
+            subtotal=row.get("subtotal", 0),
+            shipping_cost=row.get("shipping_cost", 0),
+            tax=row.get("tax", 0),
             total_amount=row["total"],
             ordered_at=row["ordered_at"],
-            carrier=row["carrier"],
-            estimated_delivery=row["estimated_delivery"],
-            delivered_at=row["delivered_at"],
-            return_eligible=row["return_eligible"],
+            tracking_number=row.get("tracking_number"),
+            carrier=row.get("carrier"),
+            estimated_delivery=row.get("estimated_delivery"),
+            delivered_at=row.get("delivered_at"),
+            return_eligible=row.get("return_eligible", False),
+            return_deadline=row.get("return_deadline"),
+            payment=row.get("payment"),
+            shipment=row.get("shipment"),
+            notes=row.get("notes"),
         )
         for row in result.data
     ]

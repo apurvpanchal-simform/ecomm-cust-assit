@@ -1,25 +1,45 @@
-from langchain_core.messages import SystemMessage, HumanMessage
-from langchain_core.runnables import RunnableConfig
-from app.graph.state import AgentState
-from langfuse import observe
-import os
+"""
+Agent node responsible for maintaining a compact, rolling summary of the conversation.
+"""
+
 import logging
+import os
+
+from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_core.runnables import RunnableConfig
+from langfuse import observe
+
+from app.graph.state import AgentState
 from app.services.llm_factory import get_llm
 
 SUMMARIZER_PROMPT = """You are a conversation summarizer. Compress older chat history into a minimal set of facts.
 
 ## Rules
 1. Extract only hard facts: user preferences, constraints, entity IDs, decisions made.
-2. Drop all pleasantries, greetings, and conversational filler.
-3. Preserve all specific IDs (order IDs, customer IDs, tracking numbers) in lowercase (e.g., "ord-123").
-4. Output a dense, bulleted list of facts.
-5. If a previous summary exists, merge new facts into it without duplicating.
+2. Preserve visual preferences (colors, styles, materials, product descriptions) crucial for image search context.
+3. Drop all pleasantries, greetings, conversational filler, and resolved issues that are no longer relevant.
+4. Preserve all specific IDs (order IDs, tracking numbers) in lowercase.
+5. Output an extremely dense, bulleted list of facts. Keep it under 5 bullet points if possible.
+6. If a previous summary exists, merge new facts and ruthlessly prune outdated information to keep the summary tiny.
 """
 
 
 @observe(name="summarizer_node")
 async def summarizer_node(state: AgentState, config: RunnableConfig) -> dict:
-    """Updates the running summary of the conversation if needed."""
+    """
+    Updates the running summary of the conversation if a sufficient chunk of new messages exists.
+
+    To manage token limits and maintain state relevance, this node condenses older conversation
+    history into a dense list of facts (preferences, constraints, entity IDs). It operates on a
+    sliding window approach, leaving recent messages unsummarized to preserve immediate context.
+
+    Args:
+        state: The global AgentState containing the current message history and summary.
+        config: Execution configuration.
+
+    Returns:
+        A dictionary containing the updated `chat_summary` and the new `summarized_message_count`.
+    """
     all_messages = state.get("messages", [])
     summarized_count = state.get("summarized_message_count", 0)
     current_summary = state.get("chat_summary", "")
@@ -61,8 +81,6 @@ async def summarizer_node(state: AgentState, config: RunnableConfig) -> dict:
 
         new_content_text = "\n\n".join(formatted_messages)
 
-
-
         llm = get_llm(temperature=0.0)
 
         prompt_messages = [SystemMessage(content=SUMMARIZER_PROMPT)]
@@ -82,16 +100,12 @@ async def summarizer_node(state: AgentState, config: RunnableConfig) -> dict:
             response = await llm.ainvoke(prompt_messages, config=config)
             new_summary = response.content
 
-
-
             logger = logging.getLogger(__name__)
             logger.info(
                 f"\n========== NEW CHAT SUMMARY ==========\n{new_summary}\n======================================\n"
             )
 
             try:
-
-
                 os.makedirs("data", exist_ok=True)
                 with open("data/summaries.log", "a", encoding="utf-8") as f:
                     f.write(f"========== SUMMARY ==========\n{new_summary}\n\n")
@@ -106,13 +120,10 @@ async def summarizer_node(state: AgentState, config: RunnableConfig) -> dict:
                 "summarized_message_count": new_summarized_count,
             }
         except Exception as e:
-
-
             logging.getLogger(__name__).exception(f"[SUMMARIZER] LLM Error: {e}")
             return {}
 
     # If no summarization is needed, return an empty dict (state unchanged)
-
 
     logging.getLogger(__name__).debug(
         f"[SUMMARIZER] Sleeping. Total msgs: {len(all_messages)}, Summarized: {summarized_count}"
