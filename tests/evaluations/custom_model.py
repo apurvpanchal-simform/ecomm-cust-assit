@@ -1,17 +1,27 @@
+import asyncio
 import os
+import threading
+import time
+from typing import AsyncGenerator
+
 from deepeval.models import DeepEvalBaseLLM
-from langchain_openai import ChatOpenAI
 from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_groq import ChatGroq
+from langchain_openai import ChatOpenAI
+
 
 class ChatAnywhereDeepSeekEvaluator(DeepEvalBaseLLM):
     """
     A custom wrapper around ChatAnywhere's API to use deepseek-reasoner
     (DeepSeek-R1) as the evaluation judge in DeepEval.
     """
+
     def __init__(self, model_name="gpt-5-mini"):
         api_key = os.getenv("CHATANYWHERE_API_KEY", os.getenv("OPENAI_API_KEY", ""))
-        base_url = os.getenv("CHATANYWHERE_BASE_URL", "https://api.chatanywhere.tech/v1")
-        
+        base_url = os.getenv(
+            "CHATANYWHERE_BASE_URL", "https://api.chatanywhere.tech/v1"
+        )
+
         # Instantiate ChatOpenAI using ChatAnywhere's base URL and API key
         self.model = ChatOpenAI(
             model=model_name,
@@ -40,15 +50,12 @@ class ChatAnywhereDeepSeekEvaluator(DeepEvalBaseLLM):
         return "ChatAnywhere DeepSeek-R1"
 
 
-import asyncio
-import time
-import threading
-
 class GoogleGeminiEvaluator(DeepEvalBaseLLM):
     """
     A custom wrapper around Google Gemini API to use gemini-3.5-flash
     as the evaluation judge in DeepEval, with built-in rate-limiting.
     """
+
     def __init__(self, model_name="gemini-3.5-flash"):
         api_key = os.getenv("GOOGLE_API_KEY")
         self.model = ChatGoogleGenerativeAI(
@@ -64,6 +71,19 @@ class GoogleGeminiEvaluator(DeepEvalBaseLLM):
 
     def load_model(self):
         return self.model
+
+    def _generate_response(
+        self, prompt: str, user_name: str
+    ) -> AsyncGenerator[str, None]:
+        with self.sync_lock:
+            now = time.time()
+            elapsed = now - self.last_sync_call
+            if elapsed < 12.5:
+                time.sleep(12.5 - elapsed)
+            self.last_sync_call = time.time()
+        chat_model = self.load_model()
+        response = chat_model.invoke(prompt)
+        return response.content
 
     def generate(self, prompt: str) -> str:
         with self.sync_lock:
@@ -96,13 +116,12 @@ class GoogleGeminiEvaluator(DeepEvalBaseLLM):
         return "Google Gemini 3.5 Flash"
 
 
-from langchain_groq import ChatGroq
-
 class GroqEvaluator(DeepEvalBaseLLM):
     """
     A custom wrapper around Groq API to use llama-3.3-70b-versatile
     as the evaluation judge in DeepEval.
     """
+
     def __init__(self, model_name="llama-3.3-70b-versatile"):
         api_key = os.getenv("GROQ_API_KEY")
         self.model = ChatGroq(
@@ -127,6 +146,3 @@ class GroqEvaluator(DeepEvalBaseLLM):
 
     def get_model_name(self):
         return "Groq Llama-3.3-70b"
-
-
-

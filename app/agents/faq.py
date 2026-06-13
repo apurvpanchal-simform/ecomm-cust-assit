@@ -1,14 +1,19 @@
-import os
+"""
+Agent node that handles general FAQ, policy, and shipping inquiries using RAG.
+"""
+
 from typing import Any
 
 from dotenv import load_dotenv
-from langfuse import observe
 from langchain_core.messages import AIMessage, SystemMessage
 from langchain_core.runnables import RunnableConfig
-from app.tools.faq_search import search_faq
+from langfuse import observe
+
 from app.graph.state import AgentState
 from app.graph.utils import filter_tool_messages
+from app.services.faq_response_cache import get_faq_response, set_faq_response
 from app.services.llm_factory import get_llm
+from app.tools.faq_search import search_faq
 
 load_dotenv()
 
@@ -33,22 +38,22 @@ async def faq_node(state: AgentState, config: RunnableConfig) -> dict:
     """
     Handles user queries related to general platform questions, policies, and FAQs.
 
-    This node is part of the LangGraph multi-agent architecture and acts as the FAQ specialist. 
-    When the supervisor delegates a query to this node, it automatically searches the FAQ 
-    knowledge base using the provided sub-query or the original user query, and then formulates 
+    This node is part of the LangGraph multi-agent architecture and acts as the FAQ specialist.
+    When the supervisor delegates a query to this node, it automatically searches the FAQ
+    knowledge base using the provided sub-query or the original user query, and then formulates
     a response using only the retrieved context.
 
     Flow:
     1. Extracts the relevant query (`sub_query` or `query`) from the state.
     2. Directly invokes the `search_faq` tool to retrieve relevant documentation.
     3. Injects the retrieved context directly into the system prompt to prevent hallucination.
-    4. Constructs a conversation array consisting of the system prompt, chat summary, 
+    4. Constructs a conversation array consisting of the system prompt, chat summary,
        task instructions, retrieved context, and recent conversation history.
     5. Invokes the LLM to generate an answer based purely on the context.
     6. Appends the AI response to the state and marks the agent as executed.
 
     Args:
-        state (AgentState): The global state of the conversation, containing history, 
+        state (AgentState): The global state of the conversation, containing history,
                             sub-queries, and execution tracking.
         config (RunnableConfig): Configuration parameters for LangChain execution.
 
@@ -67,11 +72,32 @@ async def faq_node(state: AgentState, config: RunnableConfig) -> dict:
     sub_query = sub_queries.get("faq")
     search_term = sub_query if sub_query else state.get("query", "")
 
+    customer_id = state.get("customer_id", "guest")
+    raw_query = state.get("query", "")
+
+    # --- Application-level Response Cache (5 min TTL) ---
+    # Keyed by (customer_id, normalized_query). Works across same-chat repeated questions.
+    cached_response = get_faq_response(customer_id, raw_query)
+    if cached_response:
+        return {
+            "messages": [AIMessage(content=cached_response, name="faq")],
+            "error": None,
+            "executed_agents": state.get("executed_agents", []) + ["faq"],
+            "faq_chunks": [],
+        }
+
     # Pre-fetch context using the search tool directly in Python
     try:
-        context = str(await search_faq.ainvoke({"query": search_term})).strip()
+        search_result = await search_faq.ainvoke({"query": search_term})
+        if isinstance(search_result, dict):
+            context = str(search_result.get("context", "")).strip()
+            faq_chunks = search_result.get("chunks", [])
+        else:
+            context = str(search_result).strip()
+            faq_chunks = []
     except Exception as e:
         context = f"Error performing search: {e}"
+        faq_chunks = []
 
     context_message = SystemMessage(
         content=(
@@ -84,6 +110,8 @@ async def faq_node(state: AgentState, config: RunnableConfig) -> dict:
     )
 
     conversation = [SystemMessage(content=SYSTEM_PROMPT)]
+
+    conversation.append(SystemMessage(content=f"Current Customer ID: {customer_id}"))
 
     chat_summary = state.get("chat_summary", "")
     if chat_summary:
@@ -106,6 +134,12 @@ async def faq_node(state: AgentState, config: RunnableConfig) -> dict:
         resolution_text = str(response.content).strip()
         new_messages = [AIMessage(content=resolution_text, name="faq")]
         error = None
+        # Only cache when the FAQ search actually returned chunks.
+        # faq_chunks=[] means Qdrant was unavailable or found nothing, so the
+        # LLM had no real context and likely produced an apology/fallback message.
+        # Caching such a response would serve bad answers to every future user.
+        if resolution_text and faq_chunks:
+            set_faq_response(customer_id, raw_query, resolution_text)
 
     except Exception as exc:
         resolution_text = "I encountered an error while trying to process your request. Please try again."
@@ -116,4 +150,5 @@ async def faq_node(state: AgentState, config: RunnableConfig) -> dict:
         "messages": new_messages,
         "error": error,
         "executed_agents": state.get("executed_agents", []) + ["faq"],
+        "faq_chunks": faq_chunks,
     }

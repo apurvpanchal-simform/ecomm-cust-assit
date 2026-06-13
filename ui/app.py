@@ -6,14 +6,15 @@ Connects to the FastAPI backend for authentication and chat.
 
 import os
 import uuid
-import streamlit as st
+
 import requests
+import streamlit as st
 
 API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8000")
 
 # ── Page Config ──────────────────────────────────────────────────────────
 st.set_page_config(
-    page_title="Customer Support Chat",
+    page_title="E-Commerce Assistant",
     page_icon="🛒",
     layout="centered",
 )
@@ -110,10 +111,12 @@ def login(email: str) -> bool:
         return False
 
 
-def send_message(query: str, image_b64: str = None) -> str | None:
-    """Send a chat message to the backend and return the AI response text."""
+def send_message(
+    query: str, image_b64: str = None
+) -> tuple[str | None, list[dict] | None]:
+    """Send a chat message to the backend and return the AI response text and faq chunks."""
     if not st.session_state.jwt_token:
-        return None
+        return None, None
 
     headers = {"Authorization": f"Bearer {st.session_state.jwt_token}"}
     payload = {"query": query}
@@ -133,17 +136,17 @@ def send_message(query: str, image_b64: str = None) -> str | None:
         )
         if resp.status_code == 200:
             data = resp.json()
-            return extract_response_text(data)
+            return extract_response_text(data), data.get("faq_chunks")
         elif resp.status_code == 429:
             try:
                 detail = resp.json().get("detail", "Too Many Requests")
             except Exception:
                 detail = "Too Many Requests"
-            return f"⚠️ **{detail}**"
+            return f"⚠️ **{detail}**", None
         else:
-            return f"Error: Server returned status {resp.status_code}."
+            return f"Error: Server returned status {resp.status_code}.", None
     except requests.RequestException as e:
-        return f"Error: Could not connect to the server. ({e})"
+        return f"Error: Could not connect to the server. ({e})", None
 
 
 def extract_response_text(data: dict) -> str:
@@ -186,8 +189,15 @@ def parse_reasoning(content: str) -> tuple[str | None, str]:
         clean_content = re.sub(
             r"<think>.*?</think>", "", content, flags=re.DOTALL
         ).strip()
-        return reasoning, clean_content
-    return None, content
+    else:
+        reasoning = None
+        clean_content = content
+
+    # Prevent Streamlit from rendering backticks as inline code boxes for monetary values and bold labels
+    # Remove backticks around bold formatting: `**Tax:**` -> **Tax:**
+    clean_content = re.sub(r"`(\*\*.*?\*\*)`", r"\1", clean_content)
+
+    return reasoning, clean_content
 
 
 def fetch_conversations():
@@ -257,7 +267,9 @@ def show_orders_dialog():
                 status_emoji = (
                     "✅"
                     if order["status"] == "delivered"
-                    else "🚚" if order["status"] == "shipped" else "⏳"
+                    else "🚚"
+                    if order["status"] == "shipped"
+                    else "⏳"
                 )
                 with st.expander(
                     f"{status_emoji} Order **{order['id']}** - ₹{order['total']} ({order['status'].title()})"
@@ -416,7 +428,6 @@ with st.sidebar:
 
         st.divider()
 
-
     else:
         st.info("Please log in to start chatting.")
         email = st.text_input(
@@ -436,7 +447,7 @@ with st.sidebar:
 
 
 # ── Main Chat Area ───────────────────────────────────────────────────────
-st.title("🛒 Customer Support Chat")
+st.title("🛒 E-Commerce Shopping Assistant")
 
 if not st.session_state.jwt_token:
     st.markdown("""
@@ -469,6 +480,8 @@ else:
                         with st.expander("💭 Thinking Process"):
                             st.markdown(reasoning)
                     st.markdown(clean_text, unsafe_allow_html=True)
+
+
                 else:
                     st.markdown(message["content"], unsafe_allow_html=True)
                     if message.get("image"):
@@ -632,7 +645,7 @@ else:
         # Get AI response
         with st.chat_message("assistant"):
             with st.spinner("Thinking..."):
-                response_text = send_message(actual_prompt, image_b64)
+                response_text, faq_chunks = send_message(actual_prompt, image_b64)
 
             if response_text:
                 reasoning, clean_text = parse_reasoning(response_text)
@@ -640,10 +653,12 @@ else:
                     with st.expander("💭 Thinking Process"):
                         st.markdown(reasoning)
                 st.markdown(clean_text, unsafe_allow_html=True)
-                
-                st.session_state.messages.append(
-                    {"role": "assistant", "content": response_text}
-                )
+
+                msg_data = {"role": "assistant", "content": response_text}
+                if faq_chunks:
+                    msg_data["faq_chunks"] = faq_chunks
+
+                st.session_state.messages.append(msg_data)
             else:
                 error_msg = "Something went wrong. Please try again."
                 st.error(error_msg)

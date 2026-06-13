@@ -1,9 +1,10 @@
-import os
 from dotenv import load_dotenv
-from app.db.qdrant import get_qdrant_client, ensure_faq_collection
+
+from app.db.qdrant import ensure_faq_collection, get_qdrant_client
 from app.services.llm_factory import get_embeddings
 
 load_dotenv()
+
 
 class FAQRetriever:
     def __init__(self):

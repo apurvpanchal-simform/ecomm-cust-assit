@@ -26,7 +26,7 @@
 - **💬 Persistent Chat Memory** — Dual-layer checkpointing system with Redis (hot cache) and Postgres (durable storage) ensures blazing-fast conversation recall with zero data loss.
 - **📝 Automatic Summarization** — A dedicated summarizer agent condenses long conversation histories to keep context windows lean and inference costs low.
 - **🔐 JWT Authentication** — Secure, stateless authentication via JSON Web Tokens tied to customer identities.
-- **🔄 LLM Fallback Chain** — Primary model (Groq) with automatic fallback to Google Gemini, ensuring high availability.
+- **🔄 LLM Fallback Chain** — Primary model (Groq) with automatic fallback to OpenAI and secondary Groq models, ensuring high availability.
 - **🧪 DeepEval Evaluation** — Built-in test suites using Confident AI's DeepEval framework to measure RAG retrieval and faithfulness.
 - **🚀 CI/CD Pipeline** — Fully automated GitHub Actions workflow that builds, containerizes, and deploys to Azure Container Apps on every push.
 
@@ -41,7 +41,7 @@
 | Agent | Purpose |
 |---|---|
 | **Supervisor** | Analyzes user intent and routes to the correct sub-agent(s). Handles greetings and chitchat directly. Supports multi-agent delegation for complex queries. |
-| **FAQ** | Performs semantic search over the knowledge base (shipping, returns, payments, warranties, accounts) using Nomic/Gemini embeddings + Qdrant. |
+| **FAQ** | Performs semantic search over the knowledge base (shipping, returns, payments, warranties, accounts) using OpenRouter/Gemini embeddings + Qdrant. |
 | **Order** | Looks up customer-specific order data from Supabase using tool calls (`order_lookup`, `order_details`, `order_items`). |
 | **Image Analyzer** | Uses Azure Computer Vision to extract tags and descriptions from user-uploaded images. |
 | **CLIP Embedding** | Converts text queries or images into CLIP embedding vectors for visual similarity search. |
@@ -75,6 +75,7 @@
 | [OpenRouter (OpenAI)](https://openrouter.ai/) | `openai/text-embedding-3-small` | Primary text embeddings (1024d) |
 | [Google Gemini](https://ai.google.dev/) | `gemini-embedding-2` | Fallback text embeddings (768d) |
 | [Google SigLIP](https://huggingface.co/google/siglip-base-patch16-224) | `siglip-base-patch16-224` | Image embeddings (768d) |
+| [FastEmbed](https://qdrant.github.io/fastembed/) | `Qdrant/bm25` | Sparse text embeddings for Hybrid Search |
 
 ### Data Stores
 | Service | Purpose |
@@ -181,7 +182,8 @@ ecomm-cust-assit/
 │   ├── index_catalog.py            # Product visual catalog indexing pipeline
 │   ├── ingest_customers.py         # Supabase customers table setup script
 │   ├── ingest_faq.py               # FAQ dense embedding indexing pipeline
-│   └── ingest_orders.py            # Supabase orders table setup script
+│   ├── ingest_orders.py            # Supabase orders table setup script
+│   └── ingest_products.py          # Supabase products table setup script
 ├── tests/
 │   ├── __init__.py
 │   └── evaluations/
@@ -230,7 +232,6 @@ Edit `.env` and fill in all required values:
 |---|---|
 | `GOOGLE_API_KEY` | Google AI API key (for Gemini fallback embeddings) |
 | `GROQ_API_KEY` | Groq API key (for primary LLM inference) |
-| `NOMIC_API_KEY` | Nomic API key (for optional text embeddings) |
 | `OPENAI_API_KEY` | OpenAI API key (for fallback LLM inference) |
 | `OPENAI_BASE_URL` | Optional base URL for OpenAI-compatible endpoints |
 | `OPENROUTER_API_KEY` | OpenRouter API key (for primary text embeddings) |
@@ -238,7 +239,6 @@ Edit `.env` and fill in all required values:
 | `PRIMARY_MODEL` | Primary LLM model identifier (e.g., `gpt-4o-mini`) |
 | `FALLBACK_MODEL` | Fallback LLM model identifier |
 | `EMBEDDING_MODEL` | Fallback embedding model identifier |
-| `NOMIC_EMBEDDING_MODEL` | Nomic embedding model identifier |
 | `CLIP_MODEL` | SigLIP/CLIP model path on Hugging Face |
 | `SUPABASE_URL` | Supabase project URL |
 | `SUPABASE_KEY` | Supabase service role / anon key |
@@ -288,6 +288,7 @@ Run the SQL schema in your Supabase SQL Editor:
 ### 6. Seed Data
 
 ```bash
+python ingestion/ingest_products.py     # Seed products
 python ingestion/ingest_customers.py    # Seed customers
 python ingestion/ingest_orders.py       # Seed orders
 python ingestion/ingest_faq.py          # Ingest FAQ knowledge base → Qdrant

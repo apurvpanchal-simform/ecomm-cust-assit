@@ -3,12 +3,13 @@ Search across all order items for a customer by keyword.
 """
 
 from typing import Annotated
+
+from langchain_core.tools import InjectedToolArg, tool
 from langfuse import observe
-from langchain_core.tools import tool, InjectedToolArg
 
 from app.db.supabase import get_supabase_client
-from app.schemas.order import OrderItem, OrderItemMatch, OrderItemSearchResponse
 from app.schemas.agent import ToolNotFoundResponse
+from app.schemas.order import OrderItem, OrderItemMatch, OrderItemSearchResponse
 
 
 @tool
@@ -55,11 +56,15 @@ async def search_order_items(
             name = (item_data.get("name") or "").lower()
             description = (item_data.get("description") or "").lower()
             variant = (item_data.get("variant") or "").lower()
+            color = (item_data.get("color") or "").lower()
+            size = (item_data.get("size") or "").lower()
 
             if (
                 keyword_lower in name
                 or keyword_lower in description
                 or keyword_lower in variant
+                or keyword_lower in color
+                or keyword_lower in size
             ):
                 matches.append(
                     OrderItemMatch(

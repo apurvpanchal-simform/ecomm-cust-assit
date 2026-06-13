@@ -1,22 +1,36 @@
+"""
+Tool for searching the FAQ knowledge base via semantic search.
+"""
+
+import logging
+
 from langchain_core.tools import tool
+from langfuse import observe
+
 from app.rag.retriever import FAQRetriever
 from app.schemas.agent import ToolNotFoundResponse
-from langfuse import observe
-import logging
 
 logger = logging.getLogger(__name__)
 
 
 @tool
 @observe(name="tool_search_faq")
-async def search_faq(query: str) -> str:
-    """Search the company knowledge base for policies, shipping, returns, and general info.
+async def search_faq(query: str) -> dict:
+    """
+    Search the company knowledge base for policies, shipping, returns, and general info.
+
     Use this tool whenever the user asks a general question about the company.
+
+    Args:
+        query: The user's specific question or keywords to search for.
+
+    Returns:
+        A dictionary containing the aggregated context string and individual chunks.
     """
     store = FAQRetriever()
     logger.info(f"🔍 FAQ Search Triggered! Query: '{query}'")
     chunks = await store.vector_search(query=query, top_k=5)
-    
+
     log_msg = "\n========== RAW QDRANT FAQ RESULTS ==========\n"
     if not chunks:
         log_msg += "No chunks found.\n"
@@ -29,7 +43,7 @@ async def search_faq(query: str) -> str:
         response = ToolNotFoundResponse(
             message="No relevant FAQ articles found in the knowledge base."
         )
-        return response.model_dump(mode="json")
+        return {"context": response.model_dump(mode="json"), "chunks": []}
 
     # Check if the best result's confidence score meets the threshold
     best_score = max(chunk.get("score", 0.0) for chunk in chunks)
@@ -41,14 +55,13 @@ async def search_faq(query: str) -> str:
                 "or contact our human support team for further assistance."
             )
         )
-        return response.model_dump(mode="json")
+        return {"context": response.model_dump(mode="json"), "chunks": []}
 
     # Only include chunks that meet the confidence threshold
     confident_chunks = [chunk for chunk in chunks if chunk.get("score", 0.0) >= 0.5]
 
     context = "\n\n---\n\n".join(
-        f"[Source: {chunk.get('source_file', 'unknown')}]\n"
         f"{chunk.get('content', '')}"
         for chunk in confident_chunks
     )
-    return context
+    return {"context": context, "chunks": confident_chunks}

@@ -1,7 +1,8 @@
 from functools import lru_cache
-from typing import Dict, Any
+from typing import Any, Dict
 
 from fastembed import SparseTextEmbedding
+
 
 @lru_cache(maxsize=1)
 def load_sparse_model():

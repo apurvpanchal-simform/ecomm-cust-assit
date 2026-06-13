@@ -1,8 +1,13 @@
-import os
+"""
+Script to chunk and embed markdown FAQ documents into Qdrant for RAG.
+"""
+
 import asyncio
+import os
 import sys
 import uuid
 from pathlib import Path
+
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from qdrant_client.http.models import PointStruct
 
@@ -28,6 +33,14 @@ char_splitter = RecursiveCharacterTextSplitter(
 
 
 async def ingest_documents():
+    """
+    Reads markdown files from data/faq_knowledge, chunks them using RecursiveCharacterTextSplitter,
+    generates dense text embeddings, and upserts them into the Qdrant FAQ collection.
+    """
+    from ingestion.utils import setup_database_schema
+
+    setup_database_schema()
+
     store = FAQRetriever()
     source_dir = Path("data/faq_knowledge")
     await store.initialize(recreate=True)
@@ -45,23 +58,36 @@ async def ingest_documents():
         sub_texts = char_splitter.split_text(doc["content"])
 
         for sub_text in sub_texts:
-            all_chunks.append({
-                "text": sub_text.strip(),
-                "source_file": doc["source_file"],
-            })
+            all_chunks.append(
+                {
+                    "text": sub_text.strip(),
+                    "source_file": doc["source_file"],
+                }
+            )
 
     if not all_chunks:
         print("No chunks produced — check that data/faq_knowledge/ contains .md files.")
         return
 
+    texts_to_embed = [
+        f"Source Document: {c['source_file']}\n\n{c['text']}" for c in all_chunks
+    ]
+
     # ── 3. Batch-embed all chunks with Source Context Injection ────────────────
     # We prepend the filename (e.g., 'returns.md') to help the dense model maintain
     # the overarching context of the chunk.
-    texts_to_embed = [
-        f"Source Document: {c['source_file']}\n\n{c['text']}"
-        for c in all_chunks
-    ]
-    vectors = await store.embeddings.aembed_documents(texts_to_embed)
+    vectors = []
+    batch_size = 50
+    for i in range(0, len(texts_to_embed), batch_size):
+        batch = texts_to_embed[i : i + batch_size]
+        print(
+            f"Embedding batch {i // batch_size + 1}/{(len(texts_to_embed) - 1) // batch_size + 1}..."
+        )
+        batch_vectors = await store.embeddings.aembed_documents(batch)
+        vectors.extend(batch_vectors)
+        if i + batch_size < len(texts_to_embed):
+            print("Waiting 60 seconds to respect rate limits...")
+            await asyncio.sleep(60)
 
     # ── 4. Build Qdrant points with metadata payload ──────────────────────────
     points = [
@@ -69,7 +95,7 @@ async def ingest_documents():
             id=str(uuid.uuid4()),
             vector=vector,
             payload={
-                "content":     chunk["text"],
+                "content": chunk["text"],
                 "source_file": chunk["source_file"],
             },
         )
@@ -85,7 +111,9 @@ async def ingest_documents():
     print(f"Ingested {len(points)} chunks into Qdrant !")
     print(f"  Files processed : {len(documents)}")
     print(f"  Chunks produced : {len(all_chunks)}")
-    print(f"  Avg chunk size  : {sum(len(c['text']) for c in all_chunks) // len(all_chunks)} chars")
+    print(
+        f"  Avg chunk size  : {sum(len(c['text']) for c in all_chunks) // len(all_chunks)} chars"
+    )
 
 
 if __name__ == "__main__":

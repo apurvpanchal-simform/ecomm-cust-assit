@@ -2,14 +2,15 @@
 Fetch full details for a single order — items, pricing, payment, shipping, and returns.
 """
 
-from typing import Annotated
 from datetime import datetime, timezone
+from typing import Annotated
+
+from langchain_core.tools import InjectedToolArg, tool
 from langfuse import observe
-from langchain_core.tools import tool, InjectedToolArg
 
 from app.db.supabase import get_supabase_client
-from app.schemas.order import OrderDetail, OrderItem
 from app.schemas.agent import ToolNotFoundResponse
+from app.schemas.order import OrderDetail, OrderItem
 
 
 @tool

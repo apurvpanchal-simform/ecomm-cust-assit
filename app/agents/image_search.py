@@ -1,7 +1,13 @@
+"""
+Agent node that performs multi-modal product discovery using Hybrid Search and LLM reranking.
+"""
+
+import logging
 from typing import Any
+
 from langchain_core.messages import AIMessage
 from langfuse import observe
-import logging
+
 from app.rag.image_retriever import ImageRetriever
 
 logger = logging.getLogger(__name__)
@@ -12,12 +18,18 @@ async def image_search_node(state: Any) -> dict:
     """
     Executes a multimodal (Dense + Sparse) Hybrid Search against Qdrant, followed by LLM reranking.
 
-    This node acts as the visual and semantic product discovery specialist. When the supervisor 
-    identifies a product search intent (via text, an uploaded image, or both), it routes to this node. 
-    The node performs a multi-vector fusion query and then re-ranks the raw vector search results 
+    This node acts as the visual and semantic product discovery specialist. When the supervisor
+    identifies a product search intent (via text, an uploaded image, or both), it routes to this node.
+    The node performs a multi-vector fusion query and then re-ranks the raw vector search results
     using an LLM to ensure absolute relevance to the user's nuanced intent.
-    """
 
+    Args:
+        state: The global AgentState containing embeddings, extracted text, and filters.
+
+    Returns:
+        A dictionary containing the `image_results` list, the generated `messages` array
+        with the markdown table, and the updated `executed_agents` list.
+    """
     search_query = state.get("search_query")
     image_embedding = state.get("image_embedding")
     image_description = state.get("image_description")  # OCR from image_analyzer
@@ -46,7 +58,7 @@ async def image_search_node(state: Any) -> dict:
         msg += "| Image | Product | Price |\n"
         msg += "| :---: | :--- | :--- |\n"
         for idx, item in enumerate(final_results):
-            title = item.get("title", f"Product {idx+1}").replace("|", "-")
+            title = item.get("title", f"Product {idx + 1}").replace("|", "-")
             price = item.get("price", "N/A")
             image_url = item.get("image_url", "")
             category = item.get("category", "").replace("|", "-")

@@ -1,11 +1,13 @@
+import base64
+import io
+import logging
 import os
+from functools import lru_cache
+
 import torch
 from PIL import Image
-import io, base64
-from functools import lru_cache
-from transformers import AutoProcessor, AutoModel
+from transformers import AutoModel, AutoProcessor
 
-import logging
 
 @lru_cache(maxsize=1)
 def load_clip_model():

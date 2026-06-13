@@ -1,5 +1,6 @@
 -- Run in Supabase SQL Editor
 
+
 -- ── Customers Table ──────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS customers (
     customer_id TEXT PRIMARY KEY,
@@ -10,17 +11,30 @@ CREATE TABLE IF NOT EXISTS customers (
     created_at  TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+DO $$ BEGIN
+    CREATE TYPE order_status AS ENUM ('placed', 'processing', 'shipped', 'in_transit', 'delivered', 'cancelled');
+EXCEPTION
+    WHEN duplicate_object THEN null;
+END $$;
+
+DO $$ BEGIN
+    CREATE TYPE order_payment_status AS ENUM ('pending', 'paid', 'refunded', 'failed');
+EXCEPTION
+    WHEN duplicate_object THEN null;
+END $$;
+
 -- ── Orders Table ─────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS orders (
     id                 TEXT PRIMARY KEY,
     customer_id        TEXT NOT NULL REFERENCES customers(customer_id),
-    status             TEXT NOT NULL,
-    payment_status     TEXT NOT NULL,
+    status             order_status NOT NULL,
+    payment_status     order_payment_status NOT NULL,
     total              NUMERIC(10, 2) NOT NULL,
     subtotal           NUMERIC(10, 2),
     tax                NUMERIC(10, 2),
     shipping_cost      NUMERIC(10, 2),
     ordered_at         TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    tracking_number    TEXT,
     carrier            TEXT,
     estimated_delivery TIMESTAMP WITH TIME ZONE,
     delivered_at       TIMESTAMP WITH TIME ZONE,
@@ -38,6 +52,7 @@ CREATE TABLE IF NOT EXISTS products (
     title            TEXT NOT NULL,
     description      TEXT,
     price            NUMERIC(10, 2),
+    category         TEXT,
     image            TEXT NOT NULL,  -- Original image URL
     azure_image_url  TEXT            -- Final Azure Blob CDN URL
 );
@@ -63,3 +78,11 @@ CREATE TABLE IF NOT EXISTS checkpoint_state_logs (
 );
 
 CREATE INDEX IF NOT EXISTS idx_checkpoint_state_logs_conversation ON checkpoint_state_logs(conversation_id);
+
+-- ── Additional Indexes for Faster Search ─────────────────────────────────────
+CREATE INDEX IF NOT EXISTS idx_orders_customer_id ON orders(customer_id);
+CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);
+CREATE INDEX IF NOT EXISTS idx_orders_ordered_at ON orders(ordered_at DESC);
+CREATE INDEX IF NOT EXISTS idx_products_title ON products(title);
+CREATE INDEX IF NOT EXISTS idx_customer_conversations_customer_id ON customer_conversations(customer_id);
+CREATE INDEX IF NOT EXISTS idx_checkpoint_state_logs_checkpoint_id ON checkpoint_state_logs(checkpoint_id);

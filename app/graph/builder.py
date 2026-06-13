@@ -1,13 +1,20 @@
-from langgraph.graph import StateGraph, START, END
-from app.agents.faq import faq_node
-from app.agents.order import order_node
-from app.agents.supervisor import supervisor_node
-from app.agents.summarizer import summarizer_node
-from app.agents.synthesizer import synthesizer_node
-from app.agents.clip_embedding import clip_embedding_node
-from app.agents.image_search import image_search_node
+"""
+LangGraph graph builder module.
 
+Defines the state transitions, conditional edges, and completely compiles the
+core customer assistant agentic graph.
+"""
+
+from langgraph.graph import END, START, StateGraph
+
+from app.agents.clip_embedding import clip_embedding_node
+from app.agents.faq import faq_node
 from app.agents.image_analyzer import image_analyzer_node
+from app.agents.image_search import image_search_node
+from app.agents.order import order_node
+from app.agents.summarizer import summarizer_node
+from app.agents.supervisor import supervisor_node
+from app.agents.synthesizer import synthesizer_node
 from app.graph.cleanup import cleanup_node
 from app.graph.state import AgentState
 
@@ -93,5 +100,13 @@ builder.add_edge("summarizer", END)
 
 
 def compile_graph(checkpointer=None):
-    """Compiles and returns the graph, optionally attaching a checkpointer."""
+    """
+    Compiles and returns the completely assembled LangGraph execution pipeline.
+
+    Args:
+        checkpointer: An optional checkpoint saver (like AsyncDualCheckpointer).
+
+    Returns:
+        The compiled LangGraph runnable application.
+    """
     return builder.compile(checkpointer=checkpointer)
