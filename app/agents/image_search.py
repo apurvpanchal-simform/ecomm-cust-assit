@@ -55,25 +55,19 @@ async def image_search_node(state: Any) -> dict:
         msg = "I couldn't find any products matching your search."
     else:
         msg = "Here are the top matches I found:\n\n"
-        msg += "| Image | Product | Price |\n"
-        msg += "| :---: | :--- | :--- |\n"
         for idx, item in enumerate(final_results):
-            title = item.get("title", f"Product {idx + 1}").replace("|", "-")
+            title = item.get("title", f"Product {idx + 1}")
             price = item.get("price", "N/A")
             image_url = item.get("image_url", "")
-            category = item.get("category", "").replace("|", "-")
+            category = item.get("category", "")
 
-            img_html = (
-                f'<img src="{image_url}" width="120" height="120" style="object-fit: cover; border-radius: 8px;">'
-                if image_url
-                else ""
-            )
-
-            info_html = f"**{title}**"
+            msg += f"**{title}**\n\n"
             if category:
-                info_html += f"<br>_{category.title()}_"
-
-            msg += f"| {img_html} | {info_html} | **Rs. {price}** |\n"
+                msg += f"_{category.title()}_\n\n"
+            msg += f"**Rs. {price}**\n\n"
+            if image_url:
+                msg += f"![{title}]({image_url})\n\n"
+            msg += "---\n\n"
 
     new_messages = [AIMessage(content=msg, name="image_search_agent")]
 

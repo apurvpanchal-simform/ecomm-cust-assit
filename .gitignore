@@ -34,3 +34,11 @@ venv/
 
 # Local Environment Variables
 .env.local
+
+# Agent Artifacts
+scratch/
+task.md
+walkthrough.md
+implementation_plan.md
+
+.files
