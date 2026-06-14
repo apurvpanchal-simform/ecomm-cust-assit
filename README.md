@@ -1,7 +1,7 @@
 <p align="center">
   <h1 align="center">🛒 E-Commerce Customer Assistant</h1>
   <p align="center">
-    An AI-powered multi-agent customer support system with visual product search, built with LangGraph, FastAPI, and Streamlit.
+    An AI-powered multi-agent customer support system with visual product search, built with LangGraph, FastAPI, and Chainlit.
   </p>
 </p>
 
@@ -36,6 +36,11 @@
 
 ![alt text](ecomm_architecture.png)
 
+The application uses a decoupled frontend-backend architecture:
+- **FastAPI Backend:** Orchestrates LangGraph agents, manages databases, and exposes REST endpoints.
+- **Chainlit Frontend:** A rich, React-based Chat UI providing seamless multimodal interactions.
+- **Persistent WebSockets:** While authentication and chat history use REST, real-time message streaming (including reasoning tokens and tool execution steps) flows over a persistent WebSocket connection between Chainlit and FastAPI.
+
 ### Agent Descriptions
 
 | Agent | Purpose |
@@ -66,8 +71,8 @@
 | Provider | Model | Role |
 |---|---|---|
 | [Groq](https://groq.com/) | `openai/gpt-oss-20b` | Primary inference |
-| [OpenAI](https://openai.com/) | `gpt-4o-mini` | Fallback 1 |
-| [Groq](https://groq.com/) | `openai/gpt-oss-120b` | Fallback 2 |
+| [Groq](https://groq.com/) | `openai/gpt-oss-120b` | Fallback 1 |
+| [Groq](https://groq.com/) | `groq-compound-mini` | Fallback 2 |
 
 ### Embeddings
 | Provider | Model | Role |
@@ -88,7 +93,7 @@
 ### Frontend
 | Technology | Purpose |
 |---|---|
-| [Streamlit](https://streamlit.io/) | Chat UI with image upload, conversation history, and rich product cards |
+| [Chainlit](https://chainlit.io/) | Interactive Chat UI with persistent WebSocket streaming, multimodal image uploads, tool step rendering, and conversation history. |
 
 ---
 
@@ -192,7 +197,7 @@ ecomm-cust-assit/
 │       ├── mock_dataset.py         # RAG evaluation groundtruth dataset
 │       └── test_faq_rag.py         # Faithfulness & relevancy test suites
 └── ui/
-    └── app.py                      # Streamlit interactive chat UI client
+    └── app.py                      # Chainlit interactive chat UI client
 ```
 
 ---
@@ -301,8 +306,8 @@ python ingestion/index_catalog.py       # Index product images → Qdrant + Azur
 # Terminal 1: Start the FastAPI backend
 uvicorn app.main:app --reload --port 8000
 
-# Terminal 2: Start the Streamlit frontend
-streamlit run ui/app.py --server.port 8501
+# Terminal 2: Start the Chainlit frontend
+chainlit run ui/app.py --host 0.0.0.0 --port 8501
 ```
 
 Open your browser to **http://localhost:8501** to start chatting!
@@ -533,5 +538,5 @@ This project is licensed under the MIT License. See the [LICENSE](LICENSE) file 
 ---
 
 <p align="center">
-  Built with ❤️ using LangGraph, FastAPI, and Streamlit
+  Built with ❤️ using LangGraph, FastAPI, and Chainlit
 </p>
