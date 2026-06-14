@@ -29,7 +29,7 @@ async def search_faq(query: str) -> dict:
     """
     store = FAQRetriever()
     logger.info(f"🔍 FAQ Search Triggered! Query: '{query}'")
-    chunks = await store.vector_search(query=query, top_k=5)
+    chunks = await store.vector_search(query=query, top_k=3)
 
     log_msg = "\n========== RAW QDRANT FAQ RESULTS ==========\n"
     if not chunks:

@@ -31,7 +31,7 @@ async def ensure_faq_collection(recreate: bool = False):
     if not await client.collection_exists(collection_name):
         await client.create_collection(
             collection_name=collection_name,
-            vectors_config=VectorParams(size=1024, distance=Distance.COSINE),
+            vectors_config=VectorParams(size=768, distance=Distance.COSINE),
         )
 
 
