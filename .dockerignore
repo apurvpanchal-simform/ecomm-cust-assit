@@ -11,3 +11,9 @@ __pycache__
 .DS_Store
 data/token_usage.jsonl
 uv.lock
+
+# Agent Artifacts
+scratch/
+task.md
+walkthrough.md
+implementation_plan.md

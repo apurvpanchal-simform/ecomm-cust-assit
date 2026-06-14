@@ -57,7 +57,7 @@ COPY . /app
 # Ensure the start script is executable
 RUN chmod +x /app/start.sh
 
-# Expose FastAPI and Streamlit ports
+# Expose FastAPI and Chainlit ports
 EXPOSE 8000 8501
 
 # Launch both services
