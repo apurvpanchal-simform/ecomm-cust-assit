@@ -69,39 +69,32 @@ class FallbackEmbeddings(Embeddings):
             return res
 
 
-def get_llm(temperature=0.0, cache: bool = True):
-    """Returns OpenAI/Groq models with fallbacks as requested.
+def get_llm(temperature=0.0, cache: bool | None = None):
+    """Returns Groq models with fallbacks as requested.
 
     Args:
         temperature: Sampling temperature for generation.
-        cache: Set to False to disable the global LLM cache for this call chain.
-               Use False for agents that fetch live, user-specific data (e.g., Order agent).
+        cache: Set to False to disable the global LLM cache for this call chain,
+               None to use the global cache if set, or True to force it.
     """
 
-    oss_20b_llm = ChatGroq(
-        model="openai/gpt-oss-20b", temperature=temperature, max_retries=2, timeout=15.0, cache=cache
+    primary_llm = ChatGroq(
+        model="openai/gpt-oss-20b", temperature=temperature, max_retries=2, timeout=15.0
     )
 
-    gpt4o_mini_llm = ChatOpenAI(
-        model="gpt-4o-mini",
-        api_key=os.getenv("OPENAI_API_KEY"),
-        base_url=os.getenv("OPENAI_BASE_URL"),
-        temperature=temperature,
-        max_retries=1,
-        timeout=15.0,
-        cache=cache,
+    fallback_1_llm = ChatGroq(
+        model="openai/gpt-oss-120b", temperature=temperature, max_retries=2, timeout=15.0
     )
 
-    oss_120b_llm = ChatGroq(
-        model="openai/gpt-oss-120b",
+    fallback_2_llm = ChatGroq(
+        model="groq-compound",
         temperature=temperature,
         max_retries=2,
         timeout=15.0,
-        cache=cache,
     )
 
-    # Queue: primary (20b) -> fallback 1 (4o-mini) -> fallback 2 (120b)
-    return oss_20b_llm.with_fallbacks([gpt4o_mini_llm, oss_120b_llm])
+    # Queue: primary -> fallback 1 -> fallback 2
+    return primary_llm.with_fallbacks([fallback_1_llm, fallback_2_llm])
 
 
 def get_embeddings():
@@ -113,7 +106,7 @@ def get_embeddings():
 
     openrouter_embeddings = OpenAIEmbeddings(
         model=primary_name,
-        dimensions=1024,
+        dimensions=768,
         api_key=os.getenv("OPENROUTER_API_KEY"),
         base_url="https://openrouter.ai/api/v1",
     )

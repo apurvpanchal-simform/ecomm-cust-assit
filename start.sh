@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-# Export API Base URL for Streamlit
+# Export API Base URL for Chainlit
 export API_BASE_URL="http://localhost:8000"
 
 echo "Starting FastAPI backend..."
@@ -12,9 +12,7 @@ BACKEND_PID=$!
 # Wait a moment to ensure backend starts before UI tries to connect
 sleep 3
 
-echo "Starting Streamlit frontend..."
-# Start Streamlit frontend in the foreground
-streamlit run ui/app.py --server.port 8501 --server.address 0.0.0.0
-
-# If Streamlit exits, kill the backend
+echo "Starting Chainlit frontend..."
+# Start Chainlit frontend in the foreground
+chainlit run ui/app.py --host 0.0.0.0 --port 8501
 kill $BACKEND_PID
