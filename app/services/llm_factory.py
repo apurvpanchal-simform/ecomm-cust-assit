@@ -78,12 +78,20 @@ def get_llm(temperature=0.0, cache: bool | None = None):
                None to use the global cache if set, or True to force it.
     """
 
+    # Build kwargs dict; only include cache when explicitly set so that
+    # the default (None → use global cache if configured) is preserved.
+    extra_kwargs: dict = {}
+    if cache is not None:
+        extra_kwargs["cache"] = cache
+
     primary_llm = ChatGroq(
-        model="openai/gpt-oss-20b", temperature=temperature, max_retries=2, timeout=15.0
+        model="openai/gpt-oss-20b", temperature=temperature, max_retries=2, timeout=15.0,
+        **extra_kwargs,
     )
 
     fallback_1_llm = ChatGroq(
-        model="openai/gpt-oss-120b", temperature=temperature, max_retries=2, timeout=15.0
+        model="openai/gpt-oss-120b", temperature=temperature, max_retries=2, timeout=15.0,
+        **extra_kwargs,
     )
 
     fallback_2_llm = ChatGroq(
@@ -91,6 +99,7 @@ def get_llm(temperature=0.0, cache: bool | None = None):
         temperature=temperature,
         max_retries=2,
         timeout=15.0,
+        **extra_kwargs,
     )
 
     # Queue: primary -> fallback 1 -> fallback 2

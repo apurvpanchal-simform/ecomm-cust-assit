@@ -86,8 +86,10 @@ async def synthesizer_node(state: AgentState, config: RunnableConfig) -> dict:
     if len(agent_responses) <= 1:
         return {}
 
+    has_image_context = bool(state.get("image_base64")) or state.get("image_is_safe") is False
+
     try:
-        llm = get_llm(temperature=0.3)
+        llm = get_llm(temperature=0.3, cache=False if has_image_context else None)
 
         # Format the agent responses for the LLM
         agent_responses_text = "Raw Agent Responses to combine:\n"

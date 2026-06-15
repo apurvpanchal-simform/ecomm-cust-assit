@@ -32,3 +32,5 @@ class AgentState(TypedDict, total=False):
     sub_queries: dict[str, str] | None
     # FAQ specific fields
     faq_chunks: list[dict[str, Any]] | None
+    # Ephemeral safety warning set by image_analyzer (reset each turn)
+    image_safety_warning: str | None
