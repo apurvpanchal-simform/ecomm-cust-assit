@@ -77,7 +77,9 @@ async def faq_node(state: AgentState, config: RunnableConfig) -> dict:
 
     # --- Application-level Response Cache (5 min TTL) ---
     # Keyed by (customer_id, normalized_query). Works across same-chat repeated questions.
-    cached_response = get_faq_response(customer_id, raw_query)
+    # Do not cache or check cache if there is an image, OR if an image was blocked for safety.
+    has_image_context = bool(state.get("image_base64")) or state.get("image_is_safe") is False
+    cached_response = get_faq_response(customer_id, raw_query) if not has_image_context else None
     if cached_response:
         return {
             "messages": [AIMessage(content=cached_response, name="faq")],
@@ -127,7 +129,7 @@ async def faq_node(state: AgentState, config: RunnableConfig) -> dict:
     conversation.append(context_message)
     conversation += filter_tool_messages(recent_messages)
 
-    llm = get_llm(temperature=0.4)
+    llm = get_llm(temperature=0.4, cache=False if has_image_context else None)
 
     try:
         response = await llm.ainvoke(conversation, config=config)
@@ -137,8 +139,8 @@ async def faq_node(state: AgentState, config: RunnableConfig) -> dict:
         # Only cache when the FAQ search actually returned chunks.
         # faq_chunks=[] means Qdrant was unavailable or found nothing, so the
         # LLM had no real context and likely produced an apology/fallback message.
-        # Caching such a response would serve bad answers to every future user.
-        if resolution_text and faq_chunks:
+        # 4) Write back to application-level cache, only if no image context was present
+        if resolution_text and faq_chunks and not has_image_context:
             set_faq_response(customer_id, raw_query, resolution_text)
 
     except Exception as exc:

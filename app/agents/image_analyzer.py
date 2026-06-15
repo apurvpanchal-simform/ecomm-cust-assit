@@ -1,6 +1,5 @@
 import logging
 
-from langchain_core.messages import SystemMessage
 from langfuse import observe
 
 from app.graph.state import AgentState
@@ -81,16 +80,18 @@ async def image_analyzer_node(state: AgentState) -> dict:
             logger.warning(f"Safety violation blocked image with tags: {tags}")
             return {
                 "image_base64": None,
+                "image_is_safe": False,
                 "image_tags": [],
                 "image_description": None,
-                "messages": [
-                    SystemMessage(
-                        content="SYSTEM: The user's uploaded image was blocked and removed due to safety violations (e.g., weapons or NSFW). Please inform the user politely that their image was rejected, but DO STILL process any valid text requests they made in the same query."
-                    )
-                ],
+                "image_safety_warning": "The user's uploaded image was blocked and removed due to safety violations (e.g., weapons or NSFW). Please inform the user politely that their image was rejected, but DO STILL process any valid text requests they made in the same query.",
             }
 
-        return {"image_tags": tags, "image_description": image_description}
+        return {
+            "image_tags": tags,
+            "image_description": image_description,
+            "image_safety_warning": None,
+            "image_is_safe": True,
+        }
     except Exception as e:
         logger.exception(f"Image analyzer failed: {e}")
         return {}

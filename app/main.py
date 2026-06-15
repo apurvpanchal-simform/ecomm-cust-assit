@@ -9,7 +9,7 @@ import json
 import logging
 import os
 from contextlib import asynccontextmanager
-from typing import List
+from typing import Any, List
 
 import redis
 import redis.asyncio as async_redis
@@ -120,7 +120,18 @@ async def lifespan(app: FastAPI):
             await redis_saver.asetup()
 
             class LoggingRedisCache(RedisCache):
+                def _is_image_query(self, prompt: str) -> bool:
+                    # If the prompt contains any of these indicators, we completely bypass the global cache.
+                    indicators = [
+                        "The user uploaded an image",
+                        "image_safety_warning",
+                        "The user's uploaded image was blocked",
+                    ]
+                    return any(ind in prompt for ind in indicators)
+
                 def lookup(self, prompt: str, llm_string: str):
+                    if self._is_image_query(prompt):
+                        return None
                     hit = super().lookup(prompt, llm_string)
                     if hit:
                         logger.info("🟢 CACHE HIT! Returning cached response.")
@@ -129,12 +140,24 @@ async def lifespan(app: FastAPI):
                     return hit
 
                 async def alookup(self, prompt: str, llm_string: str):
+                    if self._is_image_query(prompt):
+                        return None
                     hit = await super().alookup(prompt, llm_string)
                     if hit:
                         logger.info("🟢 CACHE HIT! Returning cached response.")
                     else:
                         logger.info("🔴 CACHE MISS! Generating new response...")
                     return hit
+
+                def update(self, prompt: str, llm_string: str, return_val: Any) -> None:
+                    if self._is_image_query(prompt):
+                        return
+                    super().update(prompt, llm_string, return_val)
+
+                async def aupdate(self, prompt: str, llm_string: str, return_val: Any) -> None:
+                    if self._is_image_query(prompt):
+                        return
+                    await super().aupdate(prompt, llm_string, return_val)
 
             logger.info("Enabling global LangChain LLM Redis EXACT MATCH cache with 1-hour TTL...")
             sync_redis_client = redis.Redis.from_url(redis_url)
@@ -457,7 +480,7 @@ async def chat_ws(websocket: WebSocket, token: str = Query(...)):
             continue  # not fatal — still try to run the graph
 
         # --- Application-level Response Cache Hit Check (Bypass Graph) ---
-        cached_response = get_faq_response(customer_id, query)
+        cached_response = get_faq_response(customer_id, query) if not image_base64 else None
         if cached_response:
             logger.info(f"🟢 FAQ RESPONSE CACHE HIT (Bypass Graph) | customer={customer_id} | query='{query}'")
             try:
@@ -496,6 +519,10 @@ async def chat_ws(websocket: WebSocket, token: str = Query(...)):
             "customer_id": customer_id,
             "messages": [HumanMessage(content=query)],
             "image_base64": image_base64 or None,
+            # Reset ephemeral image state so previous-turn safety blocks
+            # don't leak into the current turn.
+            "image_safety_warning": None,
+            "image_is_safe": None,
         }
 
         try:

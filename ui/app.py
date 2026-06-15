@@ -699,13 +699,23 @@ async def on_message(message: cl.Message):
         return
 
     # ── Image attachment ─────────────────────────────────────────────────
-    image_b64: str | None = None
+    image_elements = []
     for el in message.elements:
-        mime_type = getattr(el, "mime", "") or ""
-        if "image" in mime_type and getattr(el, "path", None):
-            with open(el.path, "rb") as f:
-                image_b64 = base64.b64encode(f.read()).decode()
-            break
+        # Some versions of chainlit use mime="image/jpeg", some use type="image"
+        is_image = el.type == "image" or (hasattr(el, "mime") and el.mime and el.mime.startswith("image/"))
+        if is_image and getattr(el, "path", None):
+            image_elements.append(el)
+
+    if len(image_elements) > 1:
+        await cl.Message(
+            content="Please upload only one photo at a time. Please try again with a single image."
+        ).send()
+        return
+
+    image_b64: str | None = None
+    if image_elements:
+        with open(image_elements[0].path, "rb") as f:
+            image_b64 = base64.b64encode(f.read()).decode()
 
     # ── Guard: WS not available ──────────────────────────────────────────
     if ws_session is None:
