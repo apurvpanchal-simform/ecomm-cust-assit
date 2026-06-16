@@ -79,7 +79,7 @@ async def faq_node(state: AgentState, config: RunnableConfig) -> dict:
     # Keyed by (customer_id, normalized_query). Works across same-chat repeated questions.
     # Do not cache or check cache if there is an image, OR if an image was blocked for safety.
     has_image_context = bool(state.get("image_base64")) or state.get("image_is_safe") is False
-    cached_response = get_faq_response(customer_id, raw_query) if not has_image_context else None
+    cached_response = await get_faq_response(customer_id, raw_query) if not has_image_context else None
     if cached_response:
         return {
             "messages": [AIMessage(content=cached_response, name="faq")],
@@ -141,7 +141,7 @@ async def faq_node(state: AgentState, config: RunnableConfig) -> dict:
         # LLM had no real context and likely produced an apology/fallback message.
         # 4) Write back to application-level cache, only if no image context was present
         if resolution_text and faq_chunks and not has_image_context:
-            set_faq_response(customer_id, raw_query, resolution_text)
+            await set_faq_response(customer_id, raw_query, resolution_text)
 
     except Exception as exc:
         resolution_text = "I encountered an error while trying to process your request. Please try again."
