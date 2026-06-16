@@ -480,7 +480,7 @@ async def chat_ws(websocket: WebSocket, token: str = Query(...)):
             continue  # not fatal — still try to run the graph
 
         # --- Application-level Response Cache Hit Check (Bypass Graph) ---
-        cached_response = get_faq_response(customer_id, query) if not image_base64 else None
+        cached_response = await get_faq_response(customer_id, query) if not image_base64 else None
         if cached_response:
             logger.info(f"🟢 FAQ RESPONSE CACHE HIT (Bypass Graph) | customer={customer_id} | query='{query}'")
             try:
