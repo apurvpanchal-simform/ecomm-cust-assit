@@ -41,4 +41,5 @@ dependencies = [
     "transformers>=5.10.2",
     "uvicorn>=0.48.0",
     "ruff>=0.15.17",
+    "aiohttp>=3.14.1",
 ]

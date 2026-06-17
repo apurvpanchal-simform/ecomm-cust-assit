@@ -18,6 +18,8 @@ class AgentState(TypedDict, total=False):
     summarized_message_count: int
     pending_agents: list[str]
     executed_agents: list[str]
+    escalate_to_human: bool | None
+
 
     # Multimodal search fields
     image_base64: str | None

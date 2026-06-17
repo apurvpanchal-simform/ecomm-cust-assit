@@ -63,6 +63,23 @@ async def supervisor_node(state: AgentState, config: RunnableConfig) -> dict:
         `pending_agents` and `sub_queries`.
     """
 
+    if state.get("escalate_to_human"):
+        return {
+            "pending_agents": [],
+            "executed_agents": [],
+            "sub_queries": {},
+            "error": None,
+            "next": "FINISH",
+            "messages": [
+                AIMessage(
+                    content="I am escalating this conversation to a human support agent. A representative will be with you shortly.",
+                    name="supervisor",
+                )
+            ],
+            "faq_chunks": [],
+            "image_results": [],
+        }
+
     messages = state.get("messages", [])
 
     llm = get_llm(temperature=0.0, cache=False if state.get("image_base64") or state.get("image_is_safe") is False else None)
