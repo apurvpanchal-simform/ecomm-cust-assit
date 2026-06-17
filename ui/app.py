@@ -16,6 +16,7 @@ import logging
 import os
 import re
 import uuid
+import urllib.parse
 from typing import Optional, Dict, List
 
 import httpx
@@ -325,7 +326,23 @@ def parse_reasoning(content: str) -> tuple[str | None, str]:
     return reasoning, clean
 
 
-# ── HTTP Helpers ─────────────────────────────────────────────────────────
+# ── API Integration ─────────────────────────────────────────────────────────
+
+import chainlit as cl
+from chainlit.config import config
+from chainlit.types import ThreadDict
+from chainlit.server import app as cl_app
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.responses import RedirectResponse
+
+class AvatarFallbackMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request, call_next):
+        response = await call_next(request)
+        if response.status_code == 404 and request.url.path.startswith("/public/avatars/"):
+            return RedirectResponse(url="/public/avatars/support_agent.png")
+        return response
+
+cl_app.add_middleware(AvatarFallbackMiddleware)
 
 
 async def api_login(email: str) -> dict | None:
@@ -409,14 +426,27 @@ class SessionWebSocket:
     """
     Wraps a single websockets connection that lives for the entire Chainlit
     session. Handles reconnection transparently if the server drops the
-    connection between turns (e.g. after an idle timeout).
+    connection between turns (e.g. after an idle timeout). Uses a background
+    task to listen for messages continuously so async notifications (like
+    human agent replies) are displayed immediately without reloading.
     """
 
-    def __init__(self, token: str):
+    def __init__(self, token: str, conversation_id: str, session_context):
         self._token = token
         self._ws: websockets.WebSocketClientProtocol | None = None
-        self._lock = asyncio.Lock()          # one message in flight at a time
-        self._url = f"{WS_BASE_URL}/chat/ws?token={token}"
+        self._url = f"{WS_BASE_URL}/chat/ws?token={token}&conversation_id={conversation_id}"
+        self._session_context = session_context
+        self._listener_task = None
+        
+        self._current_msg = None
+        self._accumulated = ""
+        self._active_steps = {}
+        self._turn_complete = asyncio.Event()
+        self._turn_complete.set()
+
+    def update_context(self, session_context):
+        self._session_context = session_context
+
 
     async def connect(self) -> None:
         """Open the WebSocket. Call once at session start."""
@@ -427,6 +457,235 @@ class SessionWebSocket:
             open_timeout=15,
         )
         logger.info("WS connected: %s", self._url)
+        if self._listener_task is None:
+            self._listener_task = asyncio.create_task(self._listen_loop())
+
+    async def _listen_loop(self):
+        """Background task that continuously listens to the WebSocket."""
+        from chainlit.context import context_var
+        
+        while True:
+            # Update the chainlit context dynamically if it was changed (e.g. user switched tabs back to this thread)
+            context_var.set(self._session_context)
+            
+            if self._ws is None or self._ws.state != websockets.State.OPEN:
+                await asyncio.sleep(1)
+                continue
+
+            try:
+                raw = await self._ws.recv()
+                try:
+                    event = json.loads(raw)
+                except json.JSONDecodeError:
+                    logger.warning("Non-JSON WS frame: %s", raw)
+                    continue
+
+                etype = event.get("type") or event.get("event")
+
+                # ── Streaming token ──────────────────────────────────
+                if etype == "token":
+                    if hasattr(self, "_typing_task") and self._typing_task:
+                        self._typing_task.cancel()
+                        self._typing_task = None
+
+                    content_chunk = event.get("content", "")
+                    
+                    if getattr(self, "_is_typing_indicator", False) and self._current_msg:
+                        # Clear the placeholder text before appending the real message
+                        self._current_msg.content = ""
+                        self._is_typing_indicator = False
+                        
+                    if self._current_msg is None:
+                        # If a human agent is joining or replying, set author accordingly
+                        author_name = "Assistant"
+                        if event.get("agent_name"):
+                            author_name = event["agent_name"]
+                        elif "Support Agent" in content_chunk or "🟢" in content_chunk:
+                            author_name = "Support Agent"
+                        
+                        self._current_msg = cl.Message(author=author_name, content="")
+                        await self._current_msg.send()
+
+                    self._accumulated += content_chunk
+                    _, visible = parse_reasoning(self._accumulated)
+                    self._current_msg.content = visible
+                    await self._current_msg.update()
+
+                # ── Tool start → Chainlit Step ───────────────────────
+                elif etype == "tool_start":
+                    name = event.get("name", "tool")
+                    step = cl.Step(name=f"🛠️ {name}", type="tool")
+                    step.input = event.get("inputs", "")
+                    await step.send()
+                    self._active_steps[name] = step
+
+                # ── Tool end → close Step ────────────────────────────
+                elif etype == "tool_end":
+                    name = event.get("name", "tool")
+                    step = self._active_steps.pop(name, None)
+                    if step:
+                        step.output = event.get("output", "")
+                        await step.update()
+
+                # ── Turn finished ────────────────────────────────────
+                elif etype == "end":
+                    if hasattr(self, "_typing_task") and self._typing_task:
+                        self._typing_task.cancel()
+                        self._typing_task = None
+                        
+                    if self._current_msg:
+                        reasoning, clean = parse_reasoning(self._accumulated)
+                        parts = []
+                        if reasoning:
+                            parts.append(
+                                f"<details>\n<summary>💭 Thinking Process</summary>"
+                                f"\n\n{reasoning}\n\n</details>\n\n"
+                            )
+                        parts.append(clean)
+                        self._current_msg.content = "".join(parts)
+                        await self._current_msg.update()
+                        
+                    # Reset state for next message
+                    self._current_msg = None
+                    self._accumulated = ""
+                    if hasattr(self, "_turn_complete"):
+                        self._turn_complete.set()
+
+                # ── Escalated Ack ────────────────────────────────────
+                elif etype == "escalated_ack":
+                    cl.user_session.set("is_escalated", True)
+                    if hasattr(self, "_typing_task") and self._typing_task:
+                        self._typing_task.cancel()
+                        self._typing_task = None
+
+                    if self._current_msg:
+                        await self._current_msg.remove()
+                    self._current_msg = None
+                    self._accumulated = ""
+                    if hasattr(self, "_turn_complete"):
+                        self._turn_complete.set()
+
+                # ── Agent Joined ─────────────────────────────────────
+                elif etype == "agent_joined":
+                    agent_name = event.get("agent_name", "Support Agent")
+                    # Store agent info so UI can display "Agent Online" status
+                    cl.user_session.set("active_agent_name", agent_name)
+
+                    if hasattr(self, "_typing_task") and self._typing_task:
+                        self._typing_task.cancel()
+                        self._typing_task = None
+                    if self._current_msg:
+                        await self._current_msg.remove()
+                    self._current_msg = None
+                    joined_content = event.get(
+                        "content",
+                        f"🟢 **{agent_name}** (Support Agent) has joined the chat. You're now connected to a human agent!"
+                    )
+                    await cl.Message(author="System", content=joined_content).send()
+                    # Signal any waiting send_message that this turn is done
+                    if hasattr(self, "_turn_complete"):
+                        self._turn_complete.set()
+
+                # ── Agent Reply ──────────────────────────────────────
+                elif etype == "agent_reply":
+                    agent_name = event.get("agent_name", "Support Agent")
+                    content = event.get("content", "")
+
+                    # Cancel any pending typing-timeout task
+                    if hasattr(self, "_typing_task") and self._typing_task:
+                        self._typing_task.cancel()
+                        self._typing_task = None
+
+                    # If there's an active placeholder/typing message, replace it
+                    if self._current_msg:
+                        self._current_msg.author = "Support Agent"
+                        self._current_msg.content = f"**{agent_name}**: {content}" if agent_name and agent_name != "Support Agent" else content
+                        await self._current_msg.update()
+                    else:
+                        msg_content = f"**{agent_name}**: {content}" if agent_name and agent_name != "Support Agent" else content
+                        await cl.Message(author="Support Agent", content=msg_content).send()
+
+                    self._current_msg = None
+                    self._is_typing_indicator = False
+                    self._accumulated = ""
+                    if hasattr(self, "_turn_complete"):
+                        self._turn_complete.set()
+
+                # ── Resolved ─────────────────────────────────────────
+                elif etype == "resolved":
+                    cl.user_session.set("is_escalated", False)
+                    cl.user_session.set("active_agent_name", None)
+                    if self._current_msg:
+                        await self._current_msg.remove()
+                    self._current_msg = None
+                    await cl.Message(
+                        author="System",
+                        content=event.get(
+                            "content",
+                            "✅ The support agent has resolved this issue. The AI assistant is ready to help you with other questions!"
+                        )
+                    ).send()
+
+                # ── Agent Typing ─────────────────────────────────────
+                elif etype == "agent_typing":
+                    agent_name = event.get("agent_name", "Support Agent")
+
+                    if self._current_msg and not getattr(self, "_is_typing_indicator", False):
+                        # Transform existing placeholder (e.g. "*Thinking...*") into typing indicator
+                        self._current_msg.author = "Support Agent"
+                        self._current_msg.content = f"*{agent_name} is typing...*" if agent_name and agent_name != "Support Agent" else "*Typing...*"
+                        self._is_typing_indicator = True
+                        await self._current_msg.update()
+                    elif not self._current_msg:
+                        # No placeholder exists: create a fresh typing bubble
+                        typing_content = f"*{agent_name} is typing...*" if agent_name and agent_name != "Support Agent" else "*Typing...*"
+                        self._current_msg = cl.Message(author="Support Agent", content=typing_content)
+                        self._is_typing_indicator = True
+                        await self._current_msg.send()
+                    # else: already showing typing indicator, just reset the timeout below
+
+                    # Reset the auto-clear timeout on every heartbeat
+                    if hasattr(self, "_typing_task") and self._typing_task:
+                        self._typing_task.cancel()
+
+                    async def clear_typing():
+                        await asyncio.sleep(6)
+                        if self._current_msg and getattr(self, "_is_typing_indicator", False):
+                            await self._current_msg.remove()
+                            self._current_msg = None
+                            self._is_typing_indicator = False
+                            self._accumulated = ""
+
+                    self._typing_task = asyncio.create_task(clear_typing())
+
+                # ── Server-side error ────────────────────────────────
+                elif etype == "error":
+                    if self._current_msg:
+                        self._current_msg.content = f"❌ **Server error:** {event.get('message', '?')}"
+                        await self._current_msg.update()
+                    else:
+                        await cl.Message(author="System", content=f"❌ **Server error:** {event.get('message', '?')}").send()
+                    self._current_msg = None
+                    self._accumulated = ""
+                    if hasattr(self, "_turn_complete"):
+                        self._turn_complete.set()
+
+            except websockets.exceptions.ConnectionClosedError as e:
+                logger.error("WS closed mid-stream: %s", e)
+                self._ws = None  # Will be reconnected by ensure_connected
+                if self._current_msg and not self._accumulated:
+                    self._current_msg.content = "❌ Connection lost mid-response. Please resend."
+                    await self._current_msg.update()
+                self._current_msg = None
+                self._accumulated = ""
+                if hasattr(self, "_turn_complete"):
+                    self._turn_complete.set()
+            except Exception as e:
+                logger.error(f"Listener error: {e}", exc_info=True)
+                if hasattr(self, "_turn_complete"):
+                    self._turn_complete.set()
+                # Do NOT sleep here — continue immediately so the next WS event
+                # is not dropped after a transient error.
 
     async def _ensure_connected(self) -> None:
         """Reconnect if the connection was lost between turns."""
@@ -435,91 +694,22 @@ class SessionWebSocket:
             await self.connect()
 
     async def close(self) -> None:
+        if self._listener_task:
+            self._listener_task.cancel()
         if self._ws and self._ws.state != websockets.State.CLOSED:
             await self._ws.close()
             logger.info("WS closed cleanly.")
 
-    async def stream_turn(
-        self,
-        payload: dict,
-        reply_msg: cl.Message,
-    ) -> None:
-        """
-        Send one chat payload and stream the response into reply_msg.
-        Acquires the per-session lock so concurrent sends cannot interleave.
-        """
-        async with self._lock:
-            await self._ensure_connected()
-            await self._ws.send(json.dumps(payload))
-
-            accumulated = ""
-            active_steps: dict[str, cl.Step] = {}
-
-            try:
-                # ⚠️ Do NOT use `async for raw in self._ws:` here!
-                # That iterator auto-closes the connection when the loop
-                # exits (even via break), killing the persistent WS.
-                # Use explicit recv() to keep the connection alive.
-                while True:
-                    raw = await self._ws.recv()
-                    try:
-                        event = json.loads(raw)
-                    except json.JSONDecodeError:
-                        logger.warning("Non-JSON WS frame: %s", raw)
-                        continue
-
-                    etype = event.get("type")
-
-                    # ── Streaming token ──────────────────────────────────
-                    if etype == "token":
-                        accumulated += event.get("content", "")
-                        _, visible = parse_reasoning(accumulated)
-                        reply_msg.content = visible
-                        await reply_msg.update()
-
-                    # ── Tool start → Chainlit Step ───────────────────────
-                    elif etype == "tool_start":
-                        name = event.get("name", "tool")
-                        step = cl.Step(name=f"🛠️ {name}", type="tool")
-                        step.input = event.get("inputs", "")
-                        await step.send()
-                        active_steps[name] = step
-
-                    # ── Tool end → close Step ────────────────────────────
-                    elif etype == "tool_end":
-                        name = event.get("name", "tool")
-                        step = active_steps.pop(name, None)
-                        if step:
-                            step.output = event.get("output", "")
-                            await step.update()
-
-                    # ── Turn finished ────────────────────────────────────
-                    elif etype == "end":
-                        reasoning, clean = parse_reasoning(accumulated)
-                        parts = []
-                        if reasoning:
-                            parts.append(
-                                f"<details>\n<summary>💭 Thinking Process</summary>"
-                                f"\n\n{reasoning}\n\n</details>\n\n"
-                            )
-                        parts.append(clean)
-                        reply_msg.content = "".join(parts)
-                        await reply_msg.update()
-                        # Break the recv() loop — WS stays open for next turn
-                        break
-
-                    # ── Server-side error ────────────────────────────────
-                    elif etype == "error":
-                        reply_msg.content = f"❌ **Server error:** {event.get('message', '?')}"
-                        await reply_msg.update()
-                        break
-
-            except websockets.exceptions.ConnectionClosedError as e:
-                logger.error("WS closed mid-stream: %s", e)
-                self._ws = None          # force reconnect on next turn
-                if not accumulated:
-                    reply_msg.content = "❌ Connection lost mid-response. Please resend."
-                    await reply_msg.update()
+    async def send_message(self, payload: dict, reply_msg: cl.Message) -> None:
+        """Send one chat payload to the websocket and set up the active message state."""
+        await self._ensure_connected()
+        # Initialize the current message so the listener loop updates it
+        self._current_msg = reply_msg
+        self._accumulated = ""
+        self._active_steps = {}
+        self._turn_complete.clear()
+        await self._ws.send(json.dumps(payload))
+        await self._turn_complete.wait()
 
 
 # ── Markdown Formatters ──────────────────────────────────────────────────
@@ -615,35 +805,35 @@ async def on_chat_start():
     cl.user_session.set("jwt_token", token)
     cl.user_session.set("conversation_id", conv_id)
 
-    # Open persistent WS connection for this session
-    ws_session = SessionWebSocket(token)
-    try:
-        await ws_session.connect()
-    except Exception as e:
-        logger.error("Could not open WS on chat start: %s", e)
-        # Store None; on_message will show an error instead of crashing
-        ws_session = None
+    from chainlit.context import context_var
+    # We create the session object but do NOT eagerly connect.
+    # The connection will be lazily established on the first message sent.
+    ws_session = SessionWebSocket(token, conv_id, context_var.get())
     cl.user_session.set("ws_session", ws_session)
 
     # Check history of this conversation
-    history = await api_fetch_history(token, conv_id)
-    cl.user_session.set("history", history)
+    history_data = await api_fetch_history(token, conv_id)
+    history_messages = history_data.get("messages", []) if isinstance(history_data, dict) else history_data
+    is_escalated = history_data.get("status") == "escalated" if isinstance(history_data, dict) else False
 
-    if not history:
-        await cl.Message(
-            author="Assistant",
-            content=(
-                "Welcome! 👋 I'm your **E-Commerce Customer Support Assistant**.\n\n"
-                "Here are a few things I can help you with:\n"
-                "- 📦 **Order Inquiries:** *'What is the status of my order?'*\n"
-                "- ❓ **FAQs & Policies:** *'What is your return policy?'*\n"
-                "- 📸 **Visual Product Search:** Upload an image to find similar items!\n\n"
-                "**Slash commands:**\n"
-                "- `/orders` — View your order history\n"
-                "- `/products` — Browse the product catalog\n\n"
-                "How can I help you today?"
-            ),
-        ).send()
+    cl.user_session.set("history", history_messages)
+    cl.user_session.set("is_escalated", is_escalated)
+
+    await cl.Message(
+        author="Assistant",
+        content=(
+            f"[\u200B](http://conversation-id/{conv_id})\n"
+            "Welcome! 👋 I'm your **E-Commerce Customer Support Assistant**.\n\n"
+            "Here are a few things I can help you with:\n"
+            "- 📦 **Order Inquiries:** *'What is the status of my order?'*\n"
+            "- ❓ **FAQs & Policies:** *'What is your return policy?'*\n"
+            "- 📸 **Visual Product Search:** Upload an image to find similar items!\n\n"
+            "**Slash commands:**\n"
+            "- `/orders` — View your order history\n"
+            "- `/products` — Browse the product catalog\n\n"
+            "How can I help you today?"
+        ),
+    ).send()
 
 @cl.on_chat_resume
 async def on_chat_resume(thread: ThreadDict):
@@ -659,22 +849,56 @@ async def on_chat_resume(thread: ThreadDict):
     cl.user_session.set("jwt_token", token)
     cl.user_session.set("conversation_id", conv_id)
 
-    ws_session = SessionWebSocket(token)
-    try:
-        await ws_session.connect()
-    except Exception as e:
-        logger.error("Could not open WS on chat resume: %s", e)
-        ws_session = None
-    cl.user_session.set("ws_session", ws_session)
+    # Restore escalated state so user gets correct indicators when resuming
+    history_data = await api_fetch_history(token, conv_id)
+    is_escalated = history_data.get("status") == "escalated" if isinstance(history_data, dict) else False
+    cl.user_session.set("is_escalated", is_escalated)
 
+    from chainlit.context import context_var
+    session_context = context_var.get()
+    
+    # Track all WS sessions to keep them alive while navigating chats
+    ws_sessions = cl.user_session.get("ws_sessions")
+    if ws_sessions is None:
+        ws_sessions = {}
+        cl.user_session.set("ws_sessions", ws_sessions)
+
+    # If we already have a WS for this conversation, just update its context
+    existing_ws = ws_sessions.get(conv_id)
+    if existing_ws and existing_ws._ws and existing_ws._ws.state == websockets.State.OPEN:
+        existing_ws.update_context(session_context)
+        cl.user_session.set("ws_session", existing_ws)
+        return
+
+    # Use a short timeout for eager connect. If it fails, ws_session will still try to
+    # reconnect lazily on the first message sent.
+    ws_session = SessionWebSocket(token, conv_id, session_context)
+    try:
+        await asyncio.wait_for(ws_session.connect(), timeout=3.0)
+    except Exception as e:
+        logger.warning("Could not eagerly open WS on chat resume (will retry on message): %s", e)
+        
+    ws_sessions[conv_id] = ws_session
+    cl.user_session.set("ws_session", ws_session)
 
 
 @cl.on_chat_end
 async def on_chat_end():
-    """Close the persistent WS when the user leaves or refreshes."""
-    ws_session: SessionWebSocket | None = cl.user_session.get("ws_session")
-    if ws_session:
-        await ws_session.close()
+    """Close all persistent WS sessions when the user leaves or refreshes."""
+    ws_sessions = cl.user_session.get("ws_sessions") or {}
+    
+    # Also grab the legacy ws_session if any
+    legacy_ws = cl.user_session.get("ws_session")
+    if legacy_ws and legacy_ws._url not in [ws._url for ws in ws_sessions.values()]:
+        ws_sessions["legacy"] = legacy_ws
+
+    for ws in ws_sessions.values():
+        if ws:
+            try:
+                await ws.close()
+            except Exception:
+                pass
+
 
 
 @cl.on_message
@@ -724,6 +948,7 @@ async def on_message(message: cl.Message):
         ).send()
         return
 
+
     # ── Stream reply over the persistent WS ─────────────────────────────
     payload = {
         "query": text,
@@ -731,10 +956,13 @@ async def on_message(message: cl.Message):
         **({"image_base64": image_b64} if image_b64 else {}),
     }
 
-    reply_msg = cl.Message(author="Assistant", content="*Thinking...*")
+    is_escalated = cl.user_session.get("is_escalated", False)
+    loading_text = "*Connecting you with a agent...*" if is_escalated else "*Thinking...*"
+    
+    reply_msg = cl.Message(author="Assistant", content=loading_text)
     await reply_msg.send()
 
-    await ws_session.stream_turn(payload, reply_msg)
+    await ws_session.send_message(payload, reply_msg)
 
 
 # ── Shortcut Handlers ────────────────────────────────────────────────────
@@ -806,4 +1034,12 @@ async def on_load_more_products(action: cl.Action):
     token = cl.user_session.get("jwt_token")
     offset = action.payload.get("offset", 0) if action.payload else 0
     await _handle_products(token, offset=offset)
+
+
+@cl.on_chat_end
+async def on_chat_end():
+    """Ensure the WebSocket connection is closed when the user leaves."""
+    ws_session = cl.user_session.get("ws_session")
+    if ws_session:
+        await ws_session.close()
 

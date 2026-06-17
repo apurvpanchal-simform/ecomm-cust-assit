@@ -8,20 +8,92 @@ import os
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.runnables import RunnableConfig
 from langfuse import observe
+from pydantic import BaseModel, Field
 
 from app.graph.state import AgentState
+from app.graph.utils import filter_tool_messages
 from app.services.llm_factory import get_llm
 
-SUMMARIZER_PROMPT = """You are a conversation summarizer. Compress older chat history into a minimal set of facts.
+SUMMARIZER_PROMPT = """You are a conversation summarizer. Your job is to extract and update structured conversation facts and issue tracking from the conversation history.
 
-## Rules
-1. Extract only hard facts: user preferences, constraints, entity IDs, decisions made.
-2. Preserve visual preferences (colors, styles, materials, product descriptions) crucial for image search context.
-3. Drop all pleasantries, greetings, conversational filler, and resolved issues that are no longer relevant.
-4. Preserve all specific IDs (order IDs, tracking numbers) in lowercase.
-5. Output an extremely dense, bulleted list of facts. Keep it under 5 bullet points if possible.
-6. If a previous summary exists, merge new facts and ruthlessly prune outdated information to keep the summary tiny.
+Analyze the 'Previous Summary' (if provided) and the 'New messages to incorporate into the summary'. Then populate the StructuredSummary schema according to these rules:
+
+1. **Merge & Update**: If a Previous Summary is provided, merge its `customer_profile_and_preferences`, `mentioned_orders`, and `resolved_issues` with the new information extracted from the new messages. Do not discard previous facts unless they are explicitly outdated, resolved, or overridden.
+2. **Customer Profile & Preferences**: Extract and maintain user preferences (sizes, color choices, budget limits, styles, materials) crucial for context.
+3. **Mentioned Orders**: Extract and maintain specific order IDs (always format in lowercase), tracking numbers, or refund states.
+4. **Active Issues Tracking**:
+   - Track active unresolved customer issues or goals (e.g., return query, order tracking request, refund dispute).
+   - If an active issue from the Previous Summary is still unresolved in the new messages, increment its `turns_active` counter by 2 (since the summarizer runs once every 2 turns).
+   - If a new issue is introduced in the new messages, add it to `active_issues` with `turns_active` initialized to 2.
+   - If an issue is resolved in the new messages, DO NOT list it in `active_issues`; instead, move it to `resolved_issues`.
+5. **Resolved Issues**: List issues or questions that have been successfully resolved, answered, or completed.
+6. **Escalate to Human**: Set `escalate_to_human` to `True` if the user explicitly asks to speak to a human/agent/support, OR if any active issue has `turns_active >= 6`. Otherwise, set it to `False`.
 """
+
+
+
+class ActiveIssue(BaseModel):
+    issue_description: str = Field(description="Description of the active unresolved issue/goal.")
+    turns_active: int = Field(description="Number of consecutive turns the issue has remained unresolved.")
+
+
+class StructuredSummary(BaseModel):
+    customer_profile_and_preferences: list[str] = Field(
+        description="List of user preferences such as sizes, color choices, budget limits, styles."
+    )
+    mentioned_orders: list[str] = Field(
+        description="List of specific order IDs (lowercase), tracking numbers, or refund states mentioned."
+    )
+    active_issues: list[ActiveIssue] = Field(
+        description="List of active unresolved issues/goals."
+    )
+    resolved_issues: list[str] = Field(
+        description="List of issues/questions that have been successfully answered or completed."
+    )
+    escalate_to_human: bool = Field(
+        description="Set to true if the user explicitly asks for a human agent OR if any active issue's turns_active has reached the threshold (>= 6)."
+    )
+
+
+def _format_summary_to_markdown(summary: StructuredSummary) -> str:
+    lines = []
+    
+    lines.append("### Customer Profile & Preferences")
+    if summary.customer_profile_and_preferences:
+        for pref in summary.customer_profile_and_preferences:
+            lines.append(f"- {pref}")
+    else:
+        lines.append("- None")
+    lines.append("")
+    
+    lines.append("### Mentioned Orders")
+    if summary.mentioned_orders:
+        for order in summary.mentioned_orders:
+            lines.append(f"- {order}")
+    else:
+        lines.append("- None")
+    lines.append("")
+    
+    lines.append("### Active Issues")
+    if summary.active_issues:
+        for issue in summary.active_issues:
+            lines.append(f"- [Turns Active: {issue.turns_active}] {issue.issue_description}")
+    else:
+        lines.append("- None")
+    lines.append("")
+    
+    lines.append("### Resolved Issues")
+    if summary.resolved_issues:
+        for issue in summary.resolved_issues:
+            lines.append(f"- {issue}")
+    else:
+        lines.append("- None")
+    lines.append("")
+    
+    lines.append("### Escalate to Human")
+    lines.append(f"- {summary.escalate_to_human}")
+    
+    return "\n".join(lines)
 
 
 @observe(name="summarizer_node")
@@ -51,29 +123,15 @@ async def summarizer_node(state: AgentState, config: RunnableConfig) -> dict:
     # To prevent "telephone" effect, we wait until we have CHUNK_SIZE extra messages
     # before we run the summarizer.
     if len(all_messages) - summarized_count >= WINDOW_SIZE + CHUNK_SIZE:
-        # Dynamic chunking: if only a few messages would be left, grab them all
-        unsummarized = len(all_messages) - summarized_count
         messages_to_grab = CHUNK_SIZE
-        if unsummarized - CHUNK_SIZE < WINDOW_SIZE:
-            # Not enough left to form a meaningful window, just grab everything
-            # up to the window boundary
-            messages_to_grab = unsummarized - WINDOW_SIZE + 1
-
         messages_to_summarize = all_messages[
             summarized_count : summarized_count + messages_to_grab
         ]
 
         # Format these messages into a readable string
         formatted_messages = []
-        for msg in messages_to_summarize:
+        for msg in filter_tool_messages(messages_to_summarize):
             msg_type = getattr(msg, "type", "")
-            # Skip ToolMessages to avoid polluting the summary with raw tool outputs
-            if msg_type == "tool":
-                continue
-            # Skip AIMessages that are pure tool-call invocations (no text)
-            if msg_type == "ai" and getattr(msg, "tool_calls", None):
-                continue
-
             role = "User" if msg_type == "human" else "Assistant"
             content = msg.content
             if content:
@@ -82,6 +140,7 @@ async def summarizer_node(state: AgentState, config: RunnableConfig) -> dict:
         new_content_text = "\n\n".join(formatted_messages)
 
         llm = get_llm(temperature=0.0)
+        structured_llm = llm.with_structured_output(StructuredSummary)
 
         prompt_messages = [SystemMessage(content=SUMMARIZER_PROMPT)]
 
@@ -97,8 +156,8 @@ async def summarizer_node(state: AgentState, config: RunnableConfig) -> dict:
         )
 
         try:
-            response = await llm.ainvoke(prompt_messages, config=config)
-            new_summary = response.content
+            structured_summary = await structured_llm.ainvoke(prompt_messages, config=config)
+            new_summary = _format_summary_to_markdown(structured_summary)
 
             logger = logging.getLogger(__name__)
             logger.info(
@@ -118,6 +177,7 @@ async def summarizer_node(state: AgentState, config: RunnableConfig) -> dict:
             return {
                 "chat_summary": new_summary,
                 "summarized_message_count": new_summarized_count,
+                "escalate_to_human": structured_summary.escalate_to_human,
             }
         except Exception as e:
             logging.getLogger(__name__).exception(f"[SUMMARIZER] LLM Error: {e}")

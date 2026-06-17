@@ -774,6 +774,7 @@ name = "e-comm-cust-assist"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
+    { name = "aiohttp" },
     { name = "azure-ai-vision-imageanalysis" },
     { name = "azure-storage-blob" },
     { name = "black" },
@@ -814,6 +815,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
+    { name = "aiohttp", specifier = ">=3.14.1" },
     { name = "azure-ai-vision-imageanalysis", specifier = ">=1.0.0" },
     { name = "azure-storage-blob", specifier = ">=12.29.0" },
     { name = "black", specifier = ">=26.5.1" },
