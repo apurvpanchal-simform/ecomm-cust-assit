@@ -1,0 +1,36 @@
+# Stage 1: Builder
+FROM python:3.12-slim AS builder
+
+# Install uv for fast dependency resolution
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+WORKDIR /app
+
+ENV UV_COMPILE_BYTECODE=1
+ENV UV_LINK_MODE=copy
+
+RUN uv venv /app/.venv
+ENV VIRTUAL_ENV=/app/.venv
+
+# Copy dependency definition and install
+COPY pyproject.frontend.toml ./pyproject.toml
+RUN uv pip install -r pyproject.toml
+
+# Stage 2: Runtime
+FROM python:3.12-slim
+
+WORKDIR /app
+
+# Copy virtual environment
+COPY --from=builder /app/.venv /app/.venv
+ENV PATH="/app/.venv/bin:$PATH"
+
+# Copy the frontend application files
+COPY ui/ ui/
+COPY public/ public/
+COPY .chainlit/ .chainlit/
+COPY chainlit.md ./
+
+# We only expose the Chainlit port
+EXPOSE 8501
+
+CMD ["chainlit", "run", "ui/app.py", "--host", "0.0.0.0", "--port", "8501"]
