@@ -1,24 +1,30 @@
-name: Build and Deploy to Azure Container Apps
+name: Deploy Frontend
 
 on:
   push:
     branches:
       - main
       - develop
+    paths:
+      - 'ui/**'
+      - 'public/**'
+      - '.chainlit/**'
+      - 'chainlit.md'
+      - 'Dockerfile.frontend'
+      - 'pyproject.frontend.toml'
   workflow_dispatch:
 
 env:
-  ACR_NAME: ${{ secrets.ACR_NAME }} # e.g. "myregistry"
+  ACR_NAME: ${{ secrets.ACR_NAME }}
   ACR_LOGIN_SERVER: ${{ secrets.ACR_NAME }}.azurecr.io
-  ACA_APP_NAME: ${{ secrets.ACA_APP_NAME }} # e.g. "ecomm-cust-assist-app"
-  ACA_RESOURCE_GROUP: ${{ secrets.ACA_RESOURCE_GROUP }} # e.g. "ecomm-rg"
-  IMAGE_NAME: ecomm-cust-assist
+  ACA_RESOURCE_GROUP: ${{ secrets.ACA_RESOURCE_GROUP }}
+  ACA_APP_NAME: ecomm-frontend-app
+  IMAGE_NAME: ecomm-frontend
   IMAGE_TAG: ${{ github.sha }}
 
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
-    
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -29,16 +35,15 @@ jobs:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
       - name: Log in to Azure Container Registry
-        run: |
-          az acr login --name ${{ env.ACR_NAME }}
+        run: az acr login --name ${{ env.ACR_NAME }}
 
-      - name: Build and Push Docker Image
+      - name: Build and Push Frontend Image
         run: |
-          docker build --build-arg HF_TOKEN=${{ secrets.HF_TOKEN }} -t ${{ env.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }} -t ${{ env.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:latest .
+          docker build -t ${{ env.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }} -t ${{ env.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:latest -f Dockerfile.frontend .
           docker push ${{ env.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
           docker push ${{ env.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:latest
 
-      - name: Deploy to Azure Container Apps
+      - name: Deploy Frontend to Azure Container Apps
         uses: azure/container-apps-deploy-action@v2
         with:
           resourceGroup: ${{ env.ACA_RESOURCE_GROUP }}
