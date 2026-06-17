@@ -95,7 +95,7 @@ def get_llm(temperature=0.0, cache: bool | None = None):
     )
 
     fallback_2_llm = ChatGroq(
-        model="groq-compound",
+        model="groq/compound",
         temperature=temperature,
         max_retries=2,
         timeout=15.0,
@@ -106,8 +106,8 @@ def get_llm(temperature=0.0, cache: bool | None = None):
     return primary_llm.with_fallbacks([fallback_1_llm, fallback_2_llm])
 
 
-def get_embeddings():
-    """Returns OpenRouter text-embedding-3-small embeddings with Gemini fallback."""
+def get_embeddings(dimensions: int = 768):
+    """Returns OpenRouter text-embedding-3-small embeddings with Gemini fallback and configurable dimensions."""
     primary_name = os.getenv(
         "OPENROUTER_EMBEDDING_MODEL", "openai/text-embedding-3-small"
     )
@@ -115,13 +115,13 @@ def get_embeddings():
 
     openrouter_embeddings = OpenAIEmbeddings(
         model=primary_name,
-        dimensions=768,
+        dimensions=dimensions,
         api_key=os.getenv("OPENROUTER_API_KEY"),
         base_url="https://openrouter.ai/api/v1",
     )
 
     gemini_embeddings = GoogleGenerativeAIEmbeddings(
-        model=fallback_name, output_dimensionality=768
+        model=fallback_name, output_dimensionality=dimensions
     )
 
     return FallbackEmbeddings(

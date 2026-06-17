@@ -1,8 +1,7 @@
 [project]
-name = "e-comm-cust-assist"
+name = "e-comm-backend"
 version = "0.1.0"
-description = "Add your description here"
-readme = "README.md"
+description = "FastAPI Backend"
 requires-python = ">=3.12"
 dependencies = [
     "azure-ai-vision-imageanalysis>=1.0.0",
@@ -34,12 +33,9 @@ dependencies = [
     "requests>=2.34.2",
     "sentencepiece>=0.2.1",
     "supabase>=2.30.1",
-    "chainlit>=1.1.400",
-    "websockets>=12.0.0",
     "torch>=2.12.0",
     "torchvision>=0.27.0",
     "transformers>=5.10.2",
     "uvicorn>=0.48.0",
-    "ruff>=0.15.17",
-    "aiohttp>=3.14.1",
+    "ruff>=0.15.17"
 ]

@@ -1,0 +1,1070 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Support Dashboard — EcomAssist</title>
+    <meta name="description" content="Human support agent dashboard for escalated customer conversations.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.6/purify.min.js"></script>
+    <style>
+        /* ── Reset & Base ─────────────────────────────────────────────── */
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        :root {
+            --bg-primary:     #0a0e1a;
+            --bg-secondary:   #111827;
+            --bg-card:        rgba(17, 24, 39, 0.7);
+            --bg-glass:       rgba(255, 255, 255, 0.04);
+            --border-glass:   rgba(255, 255, 255, 0.08);
+            --text-primary:   #f3f4f6;
+            --text-secondary: #9ca3af;
+            --text-muted:     #6b7280;
+            --accent:         #6366f1;
+            --accent-hover:   #818cf8;
+            --accent-glow:    rgba(99, 102, 241, 0.3);
+            --green:          #10b981;
+            --green-glow:     rgba(16, 185, 129, 0.25);
+            --amber:          #f59e0b;
+            --amber-glow:     rgba(245, 158, 11, 0.2);
+            --red:            #ef4444;
+            --red-glow:       rgba(239, 68, 68, 0.2);
+            --radius:         12px;
+            --radius-sm:      8px;
+            --transition:     0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* ── Layout ───────────────────────────────────────────────────── */
+        .app-container {
+            display: grid;
+            grid-template-columns: 340px 1fr 320px;
+            grid-template-rows: 60px 1fr;
+            height: 100vh;
+            gap: 0;
+        }
+
+        /* ── Top Bar ──────────────────────────────────────────────────── */
+        .top-bar {
+            grid-column: 1 / -1;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 24px;
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border-glass);
+            backdrop-filter: blur(12px);
+            z-index: 10;
+        }
+
+        .top-bar .logo {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-weight: 700;
+            font-size: 16px;
+            letter-spacing: -0.02em;
+        }
+
+        .top-bar .logo .dot {
+            width: 8px; height: 8px;
+            border-radius: 50%;
+            background: var(--green);
+            box-shadow: 0 0 8px var(--green-glow);
+            animation: pulse-dot 2s infinite;
+        }
+
+        @keyframes pulse-dot {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.6; transform: scale(1.3); }
+        }
+
+        .top-bar .agent-info {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .top-bar .agent-info input {
+            background: var(--bg-glass);
+            border: 1px solid var(--border-glass);
+            border-radius: var(--radius-sm);
+            color: var(--text-primary);
+            padding: 6px 12px;
+            font-size: 13px;
+            font-family: inherit;
+            transition: border-color var(--transition);
+            width: 180px;
+        }
+
+        .top-bar .agent-info input:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+
+        .top-bar .status-badge {
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+
+        /* ── Sidebar: Conversation List ───────────────────────────────── */
+        .sidebar {
+            background: var(--bg-secondary);
+            border-right: 1px solid var(--border-glass);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .sidebar-header {
+            padding: 16px 20px;
+            font-weight: 600;
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            color: var(--text-secondary);
+            border-bottom: 1px solid var(--border-glass);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .sidebar-header .count {
+            background: var(--accent);
+            color: white;
+            font-size: 11px;
+            font-weight: 600;
+            border-radius: 10px;
+            padding: 2px 8px;
+            min-width: 24px;
+            text-align: center;
+        }
+
+        .conversation-list {
+            flex: 1;
+            overflow-y: auto;
+            padding: 8px;
+        }
+
+        .conversation-list::-webkit-scrollbar { width: 4px; }
+        .conversation-list::-webkit-scrollbar-thumb {
+            background: rgba(255,255,255,0.1);
+            border-radius: 2px;
+        }
+
+        .conv-card {
+            padding: 14px 16px;
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            transition: all var(--transition);
+            border: 1px solid transparent;
+            margin-bottom: 4px;
+            position: relative;
+        }
+
+        .conv-card:hover {
+            background: var(--bg-glass);
+            border-color: var(--border-glass);
+        }
+
+        .conv-card.active {
+            background: rgba(99, 102, 241, 0.1);
+            border-color: rgba(99, 102, 241, 0.3);
+        }
+
+        .conv-card .conv-title {
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--text-primary);
+            margin-bottom: 4px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .conv-card .conv-meta {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 11px;
+            color: var(--text-muted);
+        }
+
+        .conv-card .conv-agent {
+            font-size: 11px;
+            color: var(--green);
+            font-weight: 500;
+            margin-top: 4px;
+        }
+
+        .conv-card .unread-dot {
+            width: 8px; height: 8px;
+            border-radius: 50%;
+            background: var(--amber);
+            box-shadow: 0 0 6px var(--amber-glow);
+            position: absolute;
+            top: 14px; right: 14px;
+        }
+
+        /* ── Main Chat Area ───────────────────────────────────────────── */
+        .chat-area {
+            display: flex;
+            flex-direction: column;
+            background: var(--bg-primary);
+            overflow: hidden;
+        }
+
+        .chat-header {
+            padding: 16px 24px;
+            border-bottom: 1px solid var(--border-glass);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: var(--bg-secondary);
+        }
+
+        .chat-header .conv-info h2 {
+            font-size: 15px;
+            font-weight: 600;
+            margin-bottom: 2px;
+        }
+
+        .chat-header .conv-info span {
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+
+        .chat-header .actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .btn {
+            padding: 8px 16px;
+            border-radius: var(--radius-sm);
+            border: none;
+            font-family: inherit;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all var(--transition);
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .btn-primary {
+            background: var(--accent);
+            color: white;
+        }
+        .btn-primary:hover {
+            background: var(--accent-hover);
+            box-shadow: 0 0 20px var(--accent-glow);
+        }
+
+        .btn-success {
+            background: var(--green);
+            color: white;
+        }
+        .btn-success:hover {
+            background: #059669;
+            box-shadow: 0 0 20px var(--green-glow);
+        }
+
+        .btn-danger {
+            background: rgba(239, 68, 68, 0.15);
+            color: var(--red);
+            border: 1px solid rgba(239, 68, 68, 0.2);
+        }
+        .btn-danger:hover {
+            background: rgba(239, 68, 68, 0.25);
+        }
+
+        .btn:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+
+        /* ── Messages ─────────────────────────────────────────────────── */
+        .messages-container {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px 24px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .messages-container::-webkit-scrollbar { width: 4px; }
+        .messages-container::-webkit-scrollbar-thumb {
+            background: rgba(255,255,255,0.08);
+            border-radius: 2px;
+        }
+
+        .message {
+            margin-bottom: 16px;
+            display: flex;
+            flex-direction: column;
+            max-width: 75%;
+            animation: msg-in 0.3s ease-out;
+        }
+
+        @keyframes msg-in {
+            from { opacity: 0; transform: translateY(8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .message.user { align-self: flex-start; align-items: flex-start; }
+        .message.assistant { align-self: flex-start; align-items: flex-start; }
+        .message.assistant.agent { align-self: flex-end; align-items: flex-end; }
+
+        .message .msg-label {
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            margin-bottom: 4px;
+            padding: 0 4px;
+        }
+
+        .message.user .msg-label { color: var(--accent); }
+        .message.assistant .msg-label { color: var(--green); }
+        .message.assistant.agent .msg-label { color: var(--amber); }
+
+        .message .msg-bubble {
+            padding: 12px 16px;
+            border-radius: var(--radius);
+            font-size: 14px;
+            line-height: 1.6;
+            word-wrap: break-word;
+        }
+
+        .message.user .msg-bubble {
+            background: rgba(99, 102, 241, 0.15);
+            border: 1px solid rgba(99, 102, 241, 0.2);
+            border-bottom-left-radius: 4px;
+        }
+
+        .message.assistant .msg-bubble {
+            background: var(--bg-glass);
+            border: 1px solid var(--border-glass);
+            border-bottom-left-radius: 4px;
+        }
+
+        .message.assistant.agent .msg-bubble {
+            background: rgba(245, 158, 11, 0.1);
+            border: 1px solid rgba(245, 158, 11, 0.2);
+            border-bottom-right-radius: 4px;
+        }
+
+        /* ── Reply Input ──────────────────────────────────────────────── */
+        .reply-bar {
+            padding: 16px 24px;
+            border-top: 1px solid var(--border-glass);
+            background: var(--bg-secondary);
+            display: flex;
+            gap: 10px;
+        }
+
+        .reply-bar textarea {
+            flex: 1;
+            background: var(--bg-glass);
+            border: 1px solid var(--border-glass);
+            border-radius: var(--radius-sm);
+            color: var(--text-primary);
+            padding: 10px 14px;
+            font-family: inherit;
+            font-size: 14px;
+            resize: none;
+            min-height: 42px;
+            max-height: 120px;
+            transition: border-color var(--transition);
+        }
+
+        .reply-bar textarea:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+
+        .reply-bar textarea::placeholder { color: var(--text-muted); }
+
+        /* ── Right Sidebar: Context ───────────────────────────────────── */
+        .context-panel {
+            background: var(--bg-secondary);
+            border-left: 1px solid var(--border-glass);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .context-header {
+            padding: 16px 20px;
+            font-weight: 600;
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            color: var(--text-secondary);
+            border-bottom: 1px solid var(--border-glass);
+        }
+
+        .context-body {
+            flex: 1;
+            padding: 16px 20px;
+            overflow-y: auto;
+            font-size: 13px;
+            line-height: 1.7;
+            color: var(--text-secondary);
+        }
+
+        .context-body::-webkit-scrollbar { width: 4px; }
+        .context-body::-webkit-scrollbar-thumb {
+            background: rgba(255,255,255,0.08);
+            border-radius: 2px;
+        }
+
+        .context-body .summary-section {
+            margin-bottom: 16px;
+        }
+
+        .context-body .summary-section h4 {
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-muted);
+            margin-bottom: 8px;
+        }
+
+        .markdown-content p { margin-bottom: 8px; }
+        .markdown-content p:last-child { margin-bottom: 0; }
+        .markdown-content ul, .markdown-content ol { margin-left: 20px; margin-bottom: 8px; }
+        .markdown-content li { margin-bottom: 4px; }
+        .markdown-content strong { color: var(--text-primary); font-weight: 600; }
+        .markdown-content h1, .markdown-content h2, .markdown-content h3 { font-size: 1.1em; color: var(--text-primary); margin-bottom: 8px; margin-top: 12px; }
+        .markdown-content a { color: var(--accent-hover); text-decoration: none; }
+        .markdown-content a:hover { text-decoration: underline; }
+        .markdown-content code { background: rgba(0,0,0,0.2); padding: 2px 4px; border-radius: 4px; font-family: monospace; font-size: 0.9em; }
+
+        .context-body .summary-text {
+            background: var(--bg-glass);
+            border: 1px solid var(--border-glass);
+            border-radius: var(--radius-sm);
+            padding: 12px;
+            white-space: pre-wrap;
+        }
+
+        /* ── Empty State ──────────────────────────────────────────────── */
+        .empty-state {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            color: var(--text-muted);
+            gap: 12px;
+        }
+
+        .empty-state .empty-icon {
+            font-size: 48px;
+            opacity: 0.3;
+        }
+
+        .empty-state p {
+            font-size: 14px;
+        }
+
+        /* ── Presence Indicators ─────────────────────────────────────── */
+        .presence-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 12px;
+            font-weight: 500;
+            padding: 4px 10px;
+            border-radius: 20px;
+            transition: all 0.3s ease;
+        }
+
+        .presence-badge.online {
+            background: rgba(16, 185, 129, 0.12);
+            border: 1px solid rgba(16, 185, 129, 0.3);
+            color: var(--green);
+        }
+
+        .presence-badge.offline {
+            background: rgba(107, 114, 128, 0.12);
+            border: 1px solid rgba(107, 114, 128, 0.2);
+            color: var(--text-muted);
+        }
+
+        .presence-dot {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+
+        .presence-badge.online .presence-dot {
+            background: var(--green);
+            box-shadow: 0 0 6px var(--green-glow);
+            animation: pulse-dot 2s infinite;
+        }
+
+        .presence-badge.offline .presence-dot {
+            background: var(--text-muted);
+        }
+
+        /* ── Customer Typing Indicator ───────────────────────────────── */
+        .typing-indicator-bar {
+            padding: 6px 24px;
+            display: none;
+            align-items: center;
+            gap: 8px;
+            font-size: 12px;
+            color: var(--text-muted);
+            font-style: italic;
+            background: var(--bg-primary);
+            border-top: 1px solid var(--border-glass);
+            animation: fadeIn 0.2s ease;
+        }
+
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+        .typing-dots span {
+            display: inline-block;
+            width: 5px;
+            height: 5px;
+            border-radius: 50%;
+            background: var(--text-muted);
+            margin: 0 1px;
+            animation: bounce 1.2s infinite;
+        }
+        .typing-dots span:nth-child(2) { animation-delay: 0.2s; }
+        .typing-dots span:nth-child(3) { animation-delay: 0.4s; }
+
+        @keyframes bounce {
+            0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
+            30% { transform: translateY(-5px); opacity: 1; }
+        }
+
+        /* ── Responsive ───────────────────────────────────────────────── */
+        @media (max-width: 1100px) {
+            .app-container {
+                grid-template-columns: 280px 1fr;
+            }
+            .context-panel { display: none; }
+        }
+
+        @media (max-width: 768px) {
+            .app-container {
+                grid-template-columns: 1fr;
+            }
+            .sidebar { display: none; }
+            .context-panel { display: none; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="app-container">
+
+    <!-- ── Top Bar ────────────────────────────────────────────────── -->
+    <header class="top-bar">
+        <div class="logo">
+            <span class="dot"></span>
+            <span>EcomAssist Support</span>
+        </div>
+        <div class="agent-info">
+            <input type="text" id="agentNameInput" placeholder="Your name (e.g. Alex)" value="" autocomplete="off">
+            <span class="status-badge" id="statusBadge">⏳ Connecting...</span>
+        </div>
+    </header>
+
+    <!-- ── Left Sidebar: Conversations ────────────────────────────── -->
+    <aside class="sidebar">
+        <div class="sidebar-header">
+            <span>Escalated Chats</span>
+            <span class="count" id="convCount">0</span>
+        </div>
+        <div class="conversation-list" id="convList">
+            <div class="empty-state">
+                <div class="empty-icon">📭</div>
+                <p>No escalated conversations</p>
+            </div>
+        </div>
+    </aside>
+
+    <!-- ── Main Chat Area ─────────────────────────────────────────── -->
+    <main class="chat-area">
+        <div class="chat-header" id="chatHeader" style="display: none;">
+            <div class="conv-info">
+                <h2 id="chatTitle">—</h2>
+                <div style="display:flex;align-items:center;gap:10px;margin-top:4px;">
+                    <span id="chatCustomer" style="font-size:12px;color:var(--text-muted);">—</span>
+                    <span class="presence-badge offline" id="customerPresenceBadge">
+                        <span class="presence-dot"></span>
+                        <span id="customerPresenceText">Offline</span>
+                    </span>
+                </div>
+            </div>
+            <div class="actions">
+                <button class="btn btn-success" id="btnJoin" onclick="joinConversation()" disabled>
+                    ✋ Claim
+                </button>
+                <button class="btn btn-danger" id="btnResolve" onclick="resolveConversation()" disabled>
+                    ✅ Resolve
+                </button>
+            </div>
+        </div>
+
+        <div class="messages-container" id="messagesContainer">
+            <div class="empty-state">
+                <div class="empty-icon">💬</div>
+                <p>Select a conversation from the sidebar</p>
+            </div>
+        </div>
+
+        <div class="typing-indicator-bar" id="customerTypingIndicator">
+            <div class="typing-dots">
+                <span></span><span></span><span></span>
+            </div>
+            Customer is typing...
+        </div>
+
+        <div class="reply-bar" id="replyBar" style="display: none;">
+            <textarea id="replyInput" placeholder="Type your reply..." rows="1"
+                      oninput="notifyTyping()"
+                      onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendReply();}"></textarea>
+            <button class="btn btn-primary" id="btnSend" onclick="sendReply()">
+                Send ↵
+            </button>
+        </div>
+    </main>
+
+    <!-- ── Right Sidebar: Context ─────────────────────────────────── -->
+    <aside class="context-panel">
+        <div class="context-header">AI Summary</div>
+        <div class="context-body" id="contextBody">
+            <div class="empty-state">
+                <div class="empty-icon">🧠</div>
+                <p>Select a conversation to view AI summary</p>
+            </div>
+        </div>
+    </aside>
+
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════════════════
+// Support Dashboard — Client-Side Logic
+// ═══════════════════════════════════════════════════════════════════════════
+
+const API_BASE = window.location.origin;
+let activeConversationId = null;
+let conversations = [];
+let eventSource = null;
+
+// ── Fetch Escalated Conversations ──────────────────────────────────────
+async function fetchConversations() {
+    try {
+        const res = await fetch(`${API_BASE}/support/conversations`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        conversations = await res.json();
+        renderConversationList();
+
+        // If we have a saved active conversation from before the refresh, reselect it
+        const savedConvId = localStorage.getItem("activeConversationId");
+        if (savedConvId && !activeConversationId) {
+            if (conversations.some(c => c.conversation_id === savedConvId)) {
+                selectConversation(savedConvId);
+            }
+        }
+    } catch (err) {
+        console.error("Failed to fetch conversations:", err);
+    }
+}
+
+function renderConversationList() {
+    const list = document.getElementById("convList");
+    const count = document.getElementById("convCount");
+    count.textContent = conversations.length;
+
+    if (conversations.length === 0) {
+        list.innerHTML = `
+            <div class="empty-state">
+                <div class="empty-icon">📭</div>
+                <p>No escalated conversations</p>
+            </div>`;
+        return;
+    }
+
+    const newHTML = conversations.map(conv => {
+        const isActive = conv.conversation_id === activeConversationId;
+        const timeAgo = conv.updated_at ? formatTimeAgo(new Date(conv.updated_at)) : "—";
+        const agentBadge = conv.assigned_agent
+            ? `<div class="conv-agent">🟢 ${conv.assigned_agent}</div>`
+            : `<div class="unread-dot"></div>`;
+
+        return `
+            <div class="conv-card ${isActive ? 'active' : ''}"
+                 onclick="selectConversation('${conv.conversation_id}')">
+                <div class="conv-title">${escapeHtml(conv.title || "Untitled")}</div>
+                <div class="conv-meta">
+                    <span>👤 ${escapeHtml(conv.customer_id)}</span>
+                    <span>${timeAgo}</span>
+                </div>
+                ${agentBadge}
+            </div>`;
+    }).join("");
+
+    if (list.innerHTML !== newHTML) {
+        list.innerHTML = newHTML;
+    }
+}
+
+// ── Select a Conversation ──────────────────────────────────────────────
+async function selectConversation(convId) {
+    activeConversationId = convId;
+    localStorage.setItem("activeConversationId", convId);
+    renderConversationList();
+
+    const conv = conversations.find(c => c.conversation_id === convId);
+
+    // Show chat header
+    const header = document.getElementById("chatHeader");
+    header.style.display = "flex";
+    document.getElementById("chatTitle").textContent = conv?.title || "Conversation";
+    document.getElementById("chatCustomer").textContent = `Customer: ${conv?.customer_id || "—"}`;
+
+    // Reset customer presence to offline when switching conversations
+    // (will be updated to online if a customer_online event arrives)
+    setCustomerPresence(false);
+
+    // Enable/disable buttons
+    const agentName = document.getElementById("agentNameInput").value.trim();
+    document.getElementById("btnJoin").disabled = !agentName || !!conv?.assigned_agent;
+    document.getElementById("btnResolve").disabled = !conv?.assigned_agent;
+
+    // Show reply bar
+    document.getElementById("replyBar").style.display = conv?.assigned_agent ? "flex" : "none";
+
+    // Load chat history
+    await loadChatHistory(convId);
+
+    // Load AI summary into context panel
+    const contextBody = document.getElementById("contextBody");
+    if (conv?.chat_summary) {
+        contextBody.innerHTML = `
+            <div class="summary-section">
+                <h4>Conversation Summary</h4>
+                <div class="summary-text markdown-content">${renderMarkdown(conv.chat_summary)}</div>
+            </div>`;
+    } else {
+        contextBody.innerHTML = `
+            <div class="empty-state">
+                <div class="empty-icon">🧠</div>
+                <p>No AI summary available</p>
+            </div>`;
+    }
+}
+
+// ── Load Chat History ──────────────────────────────────────────────────
+async function loadChatHistory(convId) {
+    try {
+        const res = await fetch(`${API_BASE}/support/conversations/${convId}/history`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        
+        const messages = Array.isArray(data) ? data : (data.messages || []);
+        renderMessages(messages);
+        
+        if (data && data.is_online) {
+            setCustomerPresence(true);
+        }
+    } catch (err) {
+        console.error("Failed to load chat history:", err);
+    }
+}
+
+function renderMessages(messages) {
+    const container = document.getElementById("messagesContainer");
+
+    if (messages.length === 0) {
+        container.innerHTML = `
+            <div class="empty-state">
+                <div class="empty-icon">💬</div>
+                <p>No messages yet</p>
+            </div>`;
+        return;
+    }
+
+    container.innerHTML = messages.map(msg => {
+        const isUser = msg.role === "user";
+        const isAgent = msg.name === "support_agent";
+        const roleClass = isUser ? "user" : "assistant";
+        const agentClass = isAgent ? " agent" : "";
+
+        let label = isUser ? "Customer" : (isAgent ? "🛡️ Support Agent" : "🤖 AI Assistant");
+        if (msg.name && !isUser && !isAgent) {
+            label = `🤖 ${msg.name}`;
+        }
+
+        return `
+            <div class="message ${roleClass}${agentClass}">
+                <span class="msg-label">${label}</span>
+                <div class="msg-bubble markdown-content">${renderMarkdown(msg.content)}</div>
+            </div>`;
+    }).join("");
+
+    if (container.innerHTML !== newHTML) {
+        container.innerHTML = newHTML;
+        // Auto-scroll to bottom only when new messages are added
+        container.scrollTop = container.scrollHeight;
+    }
+}
+
+// ── Agent Actions ──────────────────────────────────────────────────────
+async function joinConversation() {
+    const agentName = document.getElementById("agentNameInput").value.trim();
+    if (!agentName) { alert("Please enter your name first."); return; }
+    if (!activeConversationId) return;
+
+    localStorage.setItem("agentName", agentName);
+
+    try {
+        const res = await fetch(
+            `${API_BASE}/support/conversations/${activeConversationId}/join?agent_name=${encodeURIComponent(agentName)}`,
+            { method: "POST" }
+        );
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+        document.getElementById("btnJoin").disabled = true;
+        document.getElementById("btnResolve").disabled = false;
+        document.getElementById("replyBar").style.display = "flex";
+
+        // Refresh data
+        await fetchConversations();
+        await loadChatHistory(activeConversationId);
+    } catch (err) {
+        console.error("Failed to join:", err);
+        alert("Failed to join conversation. See console.");
+    }
+}
+
+let lastTypingTime = 0;
+
+async function notifyTyping() {
+    if (!activeConversationId) return;
+    const now = Date.now();
+    if (now - lastTypingTime < 2000) return; // Throttle to every 2 seconds
+    lastTypingTime = now;
+
+    const agentName = document.getElementById("agentNameInput").value.trim() || "Support Agent";
+    fetch(`${API_BASE}/support/conversations/${activeConversationId}/typing`, { 
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ agent_name: agentName })
+    }).catch(console.error);
+}
+
+async function sendReply() {
+    const input = document.getElementById("replyInput");
+    const message = input.value.trim();
+    if (!message || !activeConversationId) return;
+
+    input.value = "";
+
+    const agentName = document.getElementById("agentNameInput").value.trim() || "Support Agent";
+
+    try {
+        const res = await fetch(
+            `${API_BASE}/support/conversations/${activeConversationId}/reply`,
+            {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ message, agent_name: agentName }),
+            }
+        );
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+        // Immediately add the message to the UI for instant feedback
+        const container = document.getElementById("messagesContainer");
+        container.innerHTML += `
+            <div class="message assistant agent">
+                <span class="msg-label">🛡️ Support Agent</span>
+                <div class="msg-bubble markdown-content">${renderMarkdown(message)}</div>
+            </div>`;
+        container.scrollTop = container.scrollHeight;
+    } catch (err) {
+        console.error("Failed to send reply:", err);
+        alert("Failed to send reply. See console.");
+    }
+}
+
+async function resolveConversation() {
+    if (!activeConversationId) return;
+    if (!confirm("Resolve this conversation? The AI assistant will be re-enabled for the customer.")) return;
+
+    try {
+        const res = await fetch(
+            `${API_BASE}/support/conversations/${activeConversationId}/resolve`,
+            { method: "POST" }
+        );
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+        // Reset UI
+        activeConversationId = null;
+        localStorage.removeItem("activeConversationId");
+        document.getElementById("chatHeader").style.display = "none";
+        document.getElementById("replyBar").style.display = "none";
+        document.getElementById("messagesContainer").innerHTML = `
+            <div class="empty-state">
+                <div class="empty-icon">✅</div>
+                <p>Conversation resolved! Select another from the sidebar.</p>
+            </div>`;
+        document.getElementById("contextBody").innerHTML = `
+            <div class="empty-state">
+                <div class="empty-icon">🧠</div>
+                <p>Select a conversation to view AI summary</p>
+            </div>`;
+
+        await fetchConversations();
+    } catch (err) {
+        console.error("Failed to resolve:", err);
+        alert("Failed to resolve conversation. See console.");
+    }
+}
+
+// ── Utilities ──────────────────────────────────────────────────────────
+function setCustomerPresence(isOnline) {
+    const badge = document.getElementById("customerPresenceBadge");
+    const text = document.getElementById("customerPresenceText");
+    if (!badge || !text) return;
+    if (isOnline) {
+        badge.className = "presence-badge online";
+        text.textContent = "Online";
+    } else {
+        badge.className = "presence-badge offline";
+        text.textContent = "Offline";
+        // Also hide typing indicator if customer goes offline
+        const ind = document.getElementById("customerTypingIndicator");
+        if (ind) ind.style.display = "none";
+    }
+}
+
+function escapeHtml(text) {
+    if (!text) return "";
+    const div = document.createElement("div");
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+function renderMarkdown(text) {
+    if (!text) return "";
+    return DOMPurify.sanitize(marked.parse(text));
+}
+
+function formatTimeAgo(date) {
+    const seconds = Math.floor((new Date() - date) / 1000);
+    if (seconds < 60) return "just now";
+    if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
+    if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
+    return `${Math.floor(seconds / 86400)}d ago`;
+}
+
+// ── Initialization ─────────────────────────────────────────────────────
+document.addEventListener("DOMContentLoaded", () => {
+    // Restore agent name from localStorage
+    const savedName = localStorage.getItem("agentName");
+    if (savedName) {
+        document.getElementById("agentNameInput").value = savedName;
+    }
+
+    // Initial load
+    fetchConversations();
+
+    function connectSSE() {
+        if (eventSource) eventSource.close();
+        eventSource = new EventSource(`${API_BASE}/support/stream`);
+        
+        eventSource.onopen = () => {
+            document.getElementById("statusBadge").innerHTML = "🟢 Real-time connection active";
+        };
+
+        eventSource.onmessage = (event) => {
+            try {
+                const data = JSON.parse(event.data);
+
+                // ── Customer presence ──────────────────────────────────────
+                if (data.event === "customer_online") {
+                    if (activeConversationId === data.conversation_id) {
+                        setCustomerPresence(true);
+                    }
+                }
+
+                if (data.event === "customer_offline" || data.event === "customer_disconnected") {
+                    if (activeConversationId === data.conversation_id) {
+                        setCustomerPresence(false);
+                        const el = document.getElementById("messagesContainer");
+                        el.innerHTML += `<div class="system-message" style="text-align:center;color:var(--text-muted);font-size:0.85rem;margin:10px;font-style:italic;padding:6px 0;border-top:1px solid var(--border-glass);">🔴 Customer has disconnected</div>`;
+                        el.scrollTop = el.scrollHeight;
+                    }
+                }
+
+                // ── Conversation list refresh ───────────────────────────────
+                if (["new_escalation", "resolved", "agent_joined", "agent_reply", "customer_message", "agent_unassigned"].includes(data.event)) {
+                    fetchConversations();
+                    // If the active conversation received a new message, refresh chat history
+                    if (activeConversationId === data.conversation_id) {
+                        loadChatHistory(activeConversationId);
+                    }
+                }
+
+                // ── Customer typing ────────────────────────────────────────
+                if (data.event === "customer_typing") {
+                    if (activeConversationId === data.conversation_id) {
+                        const ind = document.getElementById("customerTypingIndicator");
+                        ind.style.display = "flex";
+                        if (window.customerTypingTimeout) clearTimeout(window.customerTypingTimeout);
+                        window.customerTypingTimeout = setTimeout(() => {
+                            ind.style.display = "none";
+                        }, 3000);
+                    }
+                }
+            } catch (err) {
+                console.error("Error parsing SSE data", err);
+            }
+        };
+        
+        eventSource.onerror = (err) => {
+            console.error("SSE connection error, reconnecting in 3s...", err);
+            document.getElementById("statusBadge").innerHTML = "🔴 Connection lost. Reconnecting...";
+            eventSource.close();
+            setTimeout(connectSSE, 3000);
+        };
+    }
+
+    connectSSE();
+
+    // Enable buttons when agent name changes and save to localStorage
+    document.getElementById("agentNameInput").addEventListener("input", (e) => {
+        localStorage.setItem("agentName", e.target.value.trim());
+        if (activeConversationId) {
+            const conv = conversations.find(c => c.conversation_id === activeConversationId);
+            const agentName = document.getElementById("agentNameInput").value.trim();
+            document.getElementById("btnJoin").disabled = !agentName || !!conv?.assigned_agent;
+        }
+    });
+});
+</script>
+
+</body>
+</html>
