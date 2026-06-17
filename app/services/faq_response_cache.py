@@ -164,6 +164,12 @@ async def get_faq_response(customer_id: str, query: str) -> str | None:
             )
 
         return None
+    except redis.exceptions.ResponseError as e:
+        if "No such index" in str(e):
+            logger.warning(f"RediSearch Index missing: {e}. Semantic cache is disabled.")
+        else:
+            logger.warning(f"Redis ResponseError in FAQ cache lookup: {e}")
+        return None
     except Exception as e:
         logger.warning(f"FAQ cache lookup failed (non-critical): {e}", exc_info=True)
         return None
@@ -206,5 +212,10 @@ async def set_faq_response(customer_id: str, query: str, response: str) -> None:
         logger.info(
             f"💾 FAQ response cached semantically | triggered_by={customer_id} | key={key} | query='{query}' | TTL={_CACHE_TTL_SECONDS}s"
         )
+    except redis.exceptions.ResponseError as e:
+        if "No such index" in str(e):
+            logger.warning(f"RediSearch Index missing: {e}. Cannot write to semantic cache.")
+        else:
+            logger.warning(f"Redis ResponseError in FAQ cache write: {e}")
     except Exception as e:
         logger.warning(f"FAQ cache write failed (non-critical): {e}", exc_info=True)

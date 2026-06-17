@@ -95,7 +95,7 @@ def get_llm(temperature=0.0, cache: bool | None = None):
     )
 
     fallback_2_llm = ChatGroq(
-        model="groq-compound",
+        model="groq/compound",
         temperature=temperature,
         max_retries=2,
         timeout=15.0,
