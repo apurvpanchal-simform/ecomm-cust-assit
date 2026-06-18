@@ -94,7 +94,10 @@ def _ensure_index():
             logger.info("Created RediSearch VSS index 'idx:faq_cache' successfully.")
         except Exception as e:
             logger.warning(
-                f"Could not create RediSearch VSS index (Search module might be disabled): {e}"
+                logger.error(
+                    "Could not create RediSearch VSS index (Search module might be disabled): %s",
+                    e,
+                )
             )
 
 
@@ -141,37 +144,67 @@ async def get_faq_response(customer_id: str, query: str) -> str | None:
             doc = results.docs[0]
             score = float(doc.score)
             # Get threshold from environment (default similarity: 0.75 -> max distance: 0.25)
-            threshold_similarity = float(os.getenv("FAQ_SEMANTIC_CACHE_THRESHOLD", "0.75"))
+            threshold_similarity = float(
+                os.getenv("FAQ_SEMANTIC_CACHE_THRESHOLD", "0.75")
+            )
             max_distance = 1.0 - threshold_similarity
 
             if score <= max_distance:
-                response_val = doc.response.decode("utf-8") if isinstance(doc.response, bytes) else str(doc.response)
-                cached_query = doc.query.decode("utf-8") if isinstance(doc.query, bytes) else str(doc.query)
+                response_val = (
+                    doc.response.decode("utf-8")
+                    if isinstance(doc.response, bytes)
+                    else str(doc.response)
+                )
+                cached_query = (
+                    doc.query.decode("utf-8")
+                    if isinstance(doc.query, bytes)
+                    else str(doc.query)
+                )
                 logger.info(
-                    f"🟢 FAQ SEMANTIC CACHE HIT | customer={customer_id} | score={score:.4f} (sim={1-score:.4f}, threshold={threshold_similarity:.2f}) | "
-                    f"matched_query='{cached_query}' | query='{query}'"
+                    "🟢 FAQ SEMANTIC CACHE HIT | customer=%s | score=%.4f (sim=%.4f, threshold=%.2f) | matched_query='%s' | query='%s'",
+                    customer_id,
+                    score,
+                    1 - score,
+                    threshold_similarity,
+                    cached_query,
+                    query,
                 )
                 return response_val
             else:
-                closest_query = doc.query.decode("utf-8") if isinstance(doc.query, bytes) else str(doc.query)
+                closest_query = (
+                    doc.query.decode("utf-8")
+                    if isinstance(doc.query, bytes)
+                    else str(doc.query)
+                )
                 logger.info(
-                    f"🔴 FAQ SEMANTIC CACHE MISS (Below threshold: {threshold_similarity:.2f}) | customer={customer_id} | closest_score={score:.4f} (sim={1-score:.4f}) | "
-                    f"closest_query='{closest_query}' | query='{query}'"
+                    "🔴 FAQ SEMANTIC CACHE MISS (Below threshold: %.2f) | customer=%s | closest_score=%.4f (sim=%.4f) | closest_query='%s' | query='%s'",
+                    threshold_similarity,
+                    customer_id,
+                    score,
+                    1 - score,
+                    closest_query,
+                    query,
                 )
         else:
             logger.info(
-                f"🔴 FAQ SEMANTIC CACHE MISS (No index hits) | customer={customer_id} | query='{query}'"
+                "🔴 FAQ SEMANTIC CACHE MISS (No index hits) | customer=%s | query='%s'",
+                customer_id,
+                query,
             )
 
         return None
     except redis.exceptions.ResponseError as e:
         if "No such index" in str(e):
-            logger.warning(f"RediSearch Index missing: {e}. Semantic cache is disabled.")
+            logger.warning(
+                logger.info(
+                    "RediSearch Index missing: %s. Semantic cache is disabled.", e
+                )
+            )
         else:
-            logger.warning(f"Redis ResponseError in FAQ cache lookup: {e}")
+            logger.warning("Redis ResponseError in FAQ cache lookup: %s", e)
         return None
     except Exception as e:
-        logger.warning(f"FAQ cache lookup failed (non-critical): {e}", exc_info=True)
+        logger.warning("FAQ cache lookup failed (non-critical): %s", e, exc_info=True)
         return None
 
 
@@ -210,12 +243,22 @@ async def set_faq_response(customer_id: str, query: str, response: str) -> None:
         # Let Redis natively expire the key after 5 minutes (300 seconds)
         client.expire(key, _CACHE_TTL_SECONDS)
         logger.info(
-            f"💾 FAQ response cached semantically | triggered_by={customer_id} | key={key} | query='{query}' | TTL={_CACHE_TTL_SECONDS}s"
+            logger.info(
+                "💾 FAQ response cached semantically | triggered_by=%s | key=%s | query='%s' | TTL=%ss",
+                customer_id,
+                key,
+                query,
+                _CACHE_TTL_SECONDS,
+            )
         )
     except redis.exceptions.ResponseError as e:
         if "No such index" in str(e):
-            logger.warning(f"RediSearch Index missing: {e}. Cannot write to semantic cache.")
+            logger.warning(
+                logger.info(
+                    "RediSearch Index missing: %s. Cannot write to semantic cache.", e
+                )
+            )
         else:
-            logger.warning(f"Redis ResponseError in FAQ cache write: {e}")
+            logger.warning("Redis ResponseError in FAQ cache write: %s", e)
     except Exception as e:
-        logger.warning(f"FAQ cache write failed (non-critical): {e}", exc_info=True)
+        logger.warning("FAQ cache write failed (non-critical): %s", e, exc_info=True)

@@ -14,6 +14,8 @@ from app.graph.state import AgentState
 from app.graph.utils import filter_tool_messages
 from app.services.llm_factory import get_llm
 
+logger = logging.getLogger(__name__)
+
 SUMMARIZER_PROMPT = """You are a conversation summarizer. Your job is to extract and update structured conversation facts and issue tracking from the conversation history.
 
 Analyze the 'Previous Summary' (if provided) and the 'New messages to incorporate into the summary'. Then populate the StructuredSummary schema according to these rules:
@@ -31,13 +33,23 @@ Analyze the 'Previous Summary' (if provided) and the 'New messages to incorporat
 """
 
 
-
 class ActiveIssue(BaseModel):
-    issue_description: str = Field(description="Description of the active unresolved issue/goal.")
-    turns_active: int = Field(description="Number of consecutive turns the issue has remained unresolved.")
+    """ActiveIssue model representing a currently open issue with its details and status.
+
+    Inherits from BaseModel and includes fields such as id, title, description, and timestamps.
+    """
+
+    issue_description: str = Field(
+        description="Description of the active unresolved issue/goal."
+    )
+    turns_active: int = Field(
+        description="Number of consecutive turns the issue has remained unresolved."
+    )
 
 
 class StructuredSummary(BaseModel):
+    """Structured summary model containing a title, list of bullet points, and optional metadata, with validation and serialization provided by BaseModel."""
+
     customer_profile_and_preferences: list[str] = Field(
         description="List of user preferences such as sizes, color choices, budget limits, styles."
     )
@@ -57,7 +69,7 @@ class StructuredSummary(BaseModel):
 
 def _format_summary_to_markdown(summary: StructuredSummary) -> str:
     lines = []
-    
+
     lines.append("### Customer Profile & Preferences")
     if summary.customer_profile_and_preferences:
         for pref in summary.customer_profile_and_preferences:
@@ -65,7 +77,7 @@ def _format_summary_to_markdown(summary: StructuredSummary) -> str:
     else:
         lines.append("- None")
     lines.append("")
-    
+
     lines.append("### Mentioned Orders")
     if summary.mentioned_orders:
         for order in summary.mentioned_orders:
@@ -73,15 +85,17 @@ def _format_summary_to_markdown(summary: StructuredSummary) -> str:
     else:
         lines.append("- None")
     lines.append("")
-    
+
     lines.append("### Active Issues")
     if summary.active_issues:
         for issue in summary.active_issues:
-            lines.append(f"- [Turns Active: {issue.turns_active}] {issue.issue_description}")
+            lines.append(
+                f"- [Turns Active: {issue.turns_active}] {issue.issue_description}"
+            )
     else:
         lines.append("- None")
     lines.append("")
-    
+
     lines.append("### Resolved Issues")
     if summary.resolved_issues:
         for issue in summary.resolved_issues:
@@ -89,10 +103,10 @@ def _format_summary_to_markdown(summary: StructuredSummary) -> str:
     else:
         lines.append("- None")
     lines.append("")
-    
+
     lines.append("### Escalate to Human")
     lines.append(f"- {summary.escalate_to_human}")
-    
+
     return "\n".join(lines)
 
 
@@ -156,10 +170,11 @@ async def summarizer_node(state: AgentState, config: RunnableConfig) -> dict:
         )
 
         try:
-            structured_summary = await structured_llm.ainvoke(prompt_messages, config=config)
+            structured_summary = await structured_llm.ainvoke(
+                prompt_messages, config=config
+            )
             new_summary = _format_summary_to_markdown(structured_summary)
 
-            logger = logging.getLogger(__name__)
             logger.info(
                 f"\n========== NEW CHAT SUMMARY ==========\n{new_summary}\n======================================\n"
             )
@@ -169,7 +184,7 @@ async def summarizer_node(state: AgentState, config: RunnableConfig) -> dict:
                 with open("data/summaries.log", "a", encoding="utf-8") as f:
                     f.write(f"========== SUMMARY ==========\n{new_summary}\n\n")
             except Exception as e:
-                logger.warning(f"Could not write to summaries.log: {e}")
+                logger.warning("Could not write to summaries.log: %s", e)
 
             # The new summarized count should include all messages we just summarized
             new_summarized_count = summarized_count + len(messages_to_summarize)

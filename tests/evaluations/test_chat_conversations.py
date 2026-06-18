@@ -15,6 +15,7 @@ evaluator_model = GroqEvaluator()
 
 @pytest.fixture(autouse=True)
 def clear_qdrant_client_cache():
+    """Clear the cached Qdrant client instances, releasing resources and forcing reinitialization on subsequent calls."""
     from app.db.qdrant import get_qdrant_client
 
     get_qdrant_client.cache_clear()
@@ -23,6 +24,7 @@ def clear_qdrant_client_cache():
 @pytest.mark.asyncio
 @pytest.mark.parametrize("data", mock_chat_dataset)
 async def test_chat_flows(data):
+    """Asynchronously test chat flows using the provided data and return the results."""
     graph = compile_graph(checkpointer=MemorySaver())
     thread_id = f"test_thread_{data['test_name']}"
     config = {"configurable": {"thread_id": thread_id}}

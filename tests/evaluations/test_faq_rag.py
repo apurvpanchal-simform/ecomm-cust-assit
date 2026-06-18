@@ -20,6 +20,7 @@ evaluator_model = GroqEvaluator()
 
 @pytest.fixture(autouse=True)
 def clear_qdrant_client_cache():
+    """Clear the cached Qdrant client instances, releasing resources and forcing reinitialization on subsequent calls."""
     from app.db.qdrant import get_qdrant_client
 
     get_qdrant_client.cache_clear()
@@ -28,6 +29,7 @@ def clear_qdrant_client_cache():
 @pytest.mark.asyncio
 @pytest.mark.parametrize("data", mock_faq_dataset)
 async def test_faq_rag(data):
+    """Tests the FAQ RAG pipeline using the provided data and returns the test results."""
     user_input = data["input"]
     expected_output = data["expected_output"]
     expected_context = data["expected_context"]

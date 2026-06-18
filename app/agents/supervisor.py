@@ -82,7 +82,14 @@ async def supervisor_node(state: AgentState, config: RunnableConfig) -> dict:
 
     messages = state.get("messages", [])
 
-    llm = get_llm(temperature=0.0, cache=False if state.get("image_base64") or state.get("image_is_safe") is False else None)
+    llm = get_llm(
+        temperature=0.0,
+        cache=(
+            False
+            if state.get("image_base64") or state.get("image_is_safe") is False
+            else None
+        ),
+    )
     structured_llm = llm.with_structured_output(Route)
 
     supervisor_messages = [SystemMessage(content=SUPERVISOR_SYSTEM_PROMPT)]
@@ -106,12 +113,14 @@ async def supervisor_node(state: AgentState, config: RunnableConfig) -> dict:
             analysis_text.append(f"Description/OCR: {image_desc}")
         if image_tags:
             analysis_text.append(f"Tags: {', '.join(image_tags)}")
-        
+
         # If there's no safety warning, explicitly instruct the LLM that this is a safe image
         # and MUST be routed to the search agent, to prevent it from copying the blocked behavior
         # from the previous turn in the conversation history.
         if not state.get("image_safety_warning"):
-            analysis_text.append("\nIMPORTANT: This image is SAFE and approved. You MUST route to 'image_search_agent'. DO NOT apologize or claim it was blocked due to policy.")
+            analysis_text.append(
+                "\nIMPORTANT: This image is SAFE and approved. You MUST route to 'image_search_agent'. DO NOT apologize or claim it was blocked due to policy."
+            )
 
         supervisor_messages.append(
             SystemMessage(
@@ -131,7 +140,9 @@ async def supervisor_node(state: AgentState, config: RunnableConfig) -> dict:
     recent_messages = filter_tool_messages(messages[summarized_count:])
 
     customer_id = state.get("customer_id", "guest")
-    supervisor_messages.append(SystemMessage(content=f"Current Customer ID: {customer_id}"))
+    supervisor_messages.append(
+        SystemMessage(content=f"Current Customer ID: {customer_id}")
+    )
 
     if recent_messages:
         supervisor_messages.append(
@@ -162,7 +173,7 @@ async def supervisor_node(state: AgentState, config: RunnableConfig) -> dict:
             p.strip() for p in pending if p in ["faq", "order", "image_search_agent"]
         ]
     except Exception as e:
-        logging.getLogger(__name__).exception(f"Supervisor LLM Error: {e}")
+        logging.getLogger(__name__).exception("Supervisor LLM Error: %s", e)
         pending_str = []
 
     response_text = ""
