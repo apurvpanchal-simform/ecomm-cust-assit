@@ -28,7 +28,7 @@ async def search_faq(query: str) -> dict:
         A dictionary containing the aggregated context string and individual chunks.
     """
     store = FAQRetriever()
-    logger.info(f"🔍 FAQ Search Triggered! Query: '{query}'")
+    logger.info("🔍 FAQ Search Triggered! Query: '%s'", query)
     chunks = await store.vector_search(query=query, top_k=3)
 
     log_msg = "\n========== RAW QDRANT FAQ RESULTS ==========\n"
@@ -61,7 +61,6 @@ async def search_faq(query: str) -> dict:
     confident_chunks = [chunk for chunk in chunks if chunk.get("score", 0.0) >= 0.5]
 
     context = "\n\n---\n\n".join(
-        f"{chunk.get('content', '')}"
-        for chunk in confident_chunks
+        f"{chunk.get('content', '')}" for chunk in confident_chunks
     )
     return {"context": context, "chunks": confident_chunks}

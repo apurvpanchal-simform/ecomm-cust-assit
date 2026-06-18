@@ -7,12 +7,19 @@ load_dotenv()
 
 
 class FAQRetriever:
+    """FAQRetriever provides methods to fetch and rank FAQs based on query terms, returning the most relevant entries from a stored knowledge base."""
+
     def __init__(self):
         self.collection_name = "ecommerce-knowledge"
         self.client = get_qdrant_client()
         self.embeddings = get_embeddings()
 
     async def initialize(self, recreate: bool = False):
+        """Initializes the object, optionally recreating its state.
+
+        Args:
+            recreate (bool): If True, discard existing state and reinitialize. Defaults to False.
+        """
         await ensure_faq_collection(recreate=recreate)
 
     async def vector_search(self, query: str, top_k: int = 3) -> list[dict]:

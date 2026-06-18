@@ -11,16 +11,24 @@ import os
 from contextlib import asynccontextmanager
 from typing import Any, List
 
-import redis.asyncio as async_redis_raw
-
 import redis
 import redis.asyncio as async_redis
+import redis.asyncio as async_redis_raw
 from dotenv import load_dotenv
-from fastapi import Depends, FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect, Query
+from fastapi import (
+    Depends,
+    FastAPI,
+    HTTPException,
+    Query,
+    Request,
+    WebSocket,
+    WebSocketDisconnect,
+)
+from langchain_community.cache import RedisCache
 from langchain_core.globals import set_llm_cache
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_core.runnables import RunnableConfig
-from langchain_community.cache import RedisCache
+from langfuse import observe
 from langfuse.langchain import CallbackHandler
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from langgraph.checkpoint.redis.aio import AsyncRedisSaver
@@ -33,22 +41,18 @@ from app.db.customers import (
 from app.db.supabase import get_supabase_client
 from app.graph.builder import compile_graph
 from app.graph.checkpointer import AsyncDualCheckpointer
-from app.middleware.auth import (
-    get_current_customer,
-)
-from app.middleware.rate_limit import (
-    rate_limit_customer,
-)
+from app.middleware.rate_limit import check_rate_limit, rate_limit_customer
+from app.middleware.distributed_lock import RedisSemaphore, DummySemaphore
 from app.schemas.api import (
     ConversationItem,
     LoginRequest,
     LoginResponse,
 )
+from app.services.faq_response_cache import get_faq_response
 from app.services.jwt_auth import (
     generate_jwt,
     verify_jwt,
 )
-from app.services.faq_response_cache import get_faq_response
 
 load_dotenv(override=True)
 
@@ -134,47 +138,62 @@ async def lifespan(app: FastAPI):
                 while not app.state.shutdown_event.is_set():
                     try:
                         async with app.state.pool.connection() as conn:
-                            cursor = await conn.execute(
-                                """
+                            cursor = await conn.execute("""
                                 SELECT conversation_id, assigned_agent 
                                 FROM customer_conversations 
                                 WHERE status = 'escalated' 
                                   AND assigned_agent IS NOT NULL 
                                   AND updated_at < NOW() - INTERVAL '10 minutes'
-                                """
-                            )
+                                """)
                             inactive_convs = await cursor.fetchall()
                             for conv in inactive_convs:
                                 conv_id = conv["conversation_id"]
                                 agent_name = conv["assigned_agent"]
-                                
+
                                 await conn.execute(
                                     """
                                     UPDATE customer_conversations 
                                     SET assigned_agent = NULL, updated_at = NOW() 
                                     WHERE conversation_id = %s
                                     """,
-                                    (conv_id,)
+                                    (conv_id,),
                                 )
-                                
+
                                 if hasattr(app.state, "redis") and app.state.redis:
-                                    notification = json.dumps({
-                                        "event": "agent_reply",
-                                        "agent_name": "System",
-                                        "content": "⚠️ *We apologize for the delay. An agent will be with you shortly.*",
-                                    })
-                                    await app.state.redis.publish(f"chat:reply:{conv_id}", notification)
-                                    await app.state.redis.publish("support:events", json.dumps({
-                                        "event": "agent_unassigned", 
-                                        "conversation_id": conv_id
-                                    }))
-                                    
-                                logger.info(f"Agent {agent_name} unassigned from {conv_id} due to inactivity.")
+                                    notification = json.dumps(
+                                        {
+                                            "event": "agent_reply",
+                                            "agent_name": "System",
+                                            "content": "⚠️ *We apologize for the delay. An agent will be with you shortly.*",
+                                        }
+                                    )
+                                    await app.state.redis.publish(
+                                        f"chat:reply:{conv_id}", notification
+                                    )
+                                    await app.state.redis.publish(
+                                        "support:events",
+                                        json.dumps(
+                                            {
+                                                "event": "agent_unassigned",
+                                                "conversation_id": conv_id,
+                                            }
+                                        ),
+                                    )
+
+                                logger.info(
+                                    logger.info(
+                                        "Agent %s unassigned from %s due to inactivity.",
+                                        agent_name,
+                                        conv_id,
+                                    )
+                                )
                     except Exception as e:
-                        logger.error(f"Error in agent_inactivity_sweep: {e}")
-                    
+                        logger.error("Error in agent_inactivity_sweep: %s", e)
+
                     try:
-                        await asyncio.wait_for(app.state.shutdown_event.wait(), timeout=60)
+                        await asyncio.wait_for(
+                            app.state.shutdown_event.wait(), timeout=60
+                        )
                     except asyncio.TimeoutError:
                         pass
 
@@ -219,19 +238,18 @@ async def lifespan(app: FastAPI):
                         return
                     super().update(prompt, llm_string, return_val)
 
-                async def aupdate(self, prompt: str, llm_string: str, return_val: Any) -> None:
+                async def aupdate(
+                    self, prompt: str, llm_string: str, return_val: Any
+                ) -> None:
                     if self._is_image_query(prompt):
                         return
                     await super().aupdate(prompt, llm_string, return_val)
 
-            logger.info("Enabling global LangChain LLM Redis EXACT MATCH cache with 1-hour TTL...")
-            sync_redis_client = redis.Redis.from_url(redis_url)
-            set_llm_cache(
-                LoggingRedisCache(
-                    redis_=sync_redis_client,
-                    ttl=3600
-                )
+            logger.info(
+                "Enabling global LangChain LLM Redis EXACT MATCH cache with 1-hour TTL..."
             )
+            sync_redis_client = redis.Redis.from_url(redis_url)
+            set_llm_cache(LoggingRedisCache(redis_=sync_redis_client, ttl=3600))
 
             dual_checkpointer = AsyncDualCheckpointer(
                 redis_saver=redis_saver,
@@ -258,6 +276,7 @@ async def lifespan(app: FastAPI):
 
 
 from fastapi.middleware.cors import CORSMiddleware
+
 app = FastAPI(lifespan=lifespan)
 
 app.add_middleware(
@@ -318,11 +337,10 @@ async def login(
     return LoginResponse(access_token=token)
 
 
-
 @app.get("/chat/conversations", response_model=List[ConversationItem])
 async def list_conversations(
     request: Request,
-    customer_id: str = Depends(get_current_customer),
+    customer_id: str = Depends(rate_limit_customer),
 ):
     """
     Retrieve a list of past conversations for the authenticated customer.
@@ -353,7 +371,7 @@ async def list_conversations(
 async def get_chat_history(
     conversation_id: str,
     request: Request,
-    customer_id: str = Depends(get_current_customer),
+    customer_id: str = Depends(rate_limit_customer),
 ):
     """
     Retrieve the full message history for a specific conversation thread.
@@ -436,17 +454,14 @@ async def get_chat_history(
 
     flush_ai_messages()
 
-    return {
-        "status": row["status"],
-        "messages": formatted_messages
-    }
+    return {"status": row["status"], "messages": formatted_messages}
 
 
 @app.delete("/chat/conversations/{conversation_id}")
 async def delete_conversation(
     conversation_id: str,
     request: Request,
-    customer_id: str = Depends(get_current_customer),
+    customer_id: str = Depends(rate_limit_customer),
 ):
     """Delete a specific conversation from history."""
     async with request.app.state.pool.connection() as conn:
@@ -463,10 +478,9 @@ async def delete_conversation(
     return {"status": "deleted"}
 
 
-
 @app.get("/orders")
 async def get_orders(
-    customer_id: str = Depends(get_current_customer),
+    customer_id: str = Depends(rate_limit_customer),
 ):
     """Fetch raw user orders from Supabase."""
     supabase = await get_supabase_client()
@@ -482,7 +496,7 @@ async def get_orders(
 
 @app.get("/products")
 async def get_products(
-    customer_id: str = Depends(get_current_customer),
+    customer_id: str = Depends(rate_limit_customer),
 ):
     """Fetch raw products from Supabase."""
     supabase = await get_supabase_client()
@@ -491,6 +505,7 @@ async def get_products(
 
 
 # ── Redis Pub/Sub Listener for Human Agent Messages ──────────────────────────
+
 
 async def _redis_pubsub_listener(
     pubsub: async_redis_raw.client.PubSub,
@@ -507,17 +522,58 @@ async def _redis_pubsub_listener(
                 continue
 
             event_type = payload.get("event")
-            content = payload.get("content", "")
+            _content = payload.get("content", "")
 
-            if event_type in ("agent_joined", "agent_reply", "resolved", "agent_typing"):
+            if event_type in (
+                "agent_joined",
+                "agent_reply",
+                "resolved",
+                "agent_typing",
+            ):
                 await websocket.send_json(payload)
     except asyncio.CancelledError:
         pass
     except Exception as e:
-        logger.warning(f"Pub/Sub listener stopped: {e}")
+        logger.warning("Pub/Sub listener stopped: %s", e)
+
+
+@observe(name="customer_escalated_message", as_type="generation")
+async def _record_customer_bypass_message(
+    thread_id: str,
+    query: str,
+    image_base64: str | None,
+    customer_id: str,
+    graph,
+    redis_client,
+):
+    config = RunnableConfig(configurable={"thread_id": thread_id})
+    msg_content = [{"type": "text", "text": query}]
+    if image_base64:
+        msg_content.append(
+            {
+                "type": "image_url",
+                "image_url": {"url": f"data:image/jpeg;base64,{image_base64}"},
+            }
+        )
+    await graph.aupdate_state(
+        config,
+        {
+            "messages": [HumanMessage(content=msg_content)],
+            "customer_id": customer_id,
+            "query": query,
+        },
+    )
+    if redis_client:
+        await redis_client.publish(
+            "support:events",
+            json.dumps({"event": "customer_message", "conversation_id": thread_id}),
+        )
+
 
 @app.websocket("/chat/ws")
-async def chat_ws(websocket: WebSocket, token: str = Query(...), conversation_id: str = Query(None)):
+async def chat_ws(
+    websocket: WebSocket, token: str = Query(...), conversation_id: str = Query(None)
+):
     """
     WebSocket endpoint for real-time streaming of LangGraph agent events.
     Maintains a persistent connection across multiple conversation turns.
@@ -527,12 +583,12 @@ async def chat_ws(websocket: WebSocket, token: str = Query(...), conversation_id
         payload = verify_jwt(token)
         customer_id = payload["sub"]
     except Exception as e:
-        logger.error(f"JWT verification failed: {e}")
+        logger.error("JWT verification failed: %s", e)
         await websocket.close(code=1008, reason="Invalid token")
         return
 
     await websocket.accept()
-    logger.info(f"WebSocket accepted for customer_id={customer_id}")
+    logger.info("WebSocket accepted for customer_id=%s", customer_id)
 
     app_state = websocket.scope["app"].state
 
@@ -545,18 +601,18 @@ async def chat_ws(websocket: WebSocket, token: str = Query(...), conversation_id
     if conversation_id:
         pubsub = pubsub_redis.pubsub()
         await pubsub.subscribe(f"chat:reply:{conversation_id}")
-        listener_task = asyncio.create_task(
-            _redis_pubsub_listener(pubsub, websocket)
-        )
+        listener_task = asyncio.create_task(_redis_pubsub_listener(pubsub, websocket))
         # Notify support dashboard that customer is now online
         redis_client_ref = getattr(app_state, "redis", None)
         if redis_client_ref:
             try:
                 await redis_client_ref.set(f"presence:{conversation_id}", "online")
-                await redis_client_ref.publish("support:events", json.dumps({
-                    "event": "customer_online",
-                    "conversation_id": conversation_id
-                }))
+                await redis_client_ref.publish(
+                    "support:events",
+                    json.dumps(
+                        {"event": "customer_online", "conversation_id": conversation_id}
+                    ),
+                )
             except Exception:
                 pass
 
@@ -567,21 +623,33 @@ async def chat_ws(websocket: WebSocket, token: str = Query(...), conversation_id
             try:
                 data = await asyncio.wait_for(websocket.receive_json(), timeout=600)
             except asyncio.TimeoutError:
-                logger.info(f"WebSocket closed due to inactivity for customer_id={customer_id}")
+                logger.info(
+                    logger.info(
+                        "WebSocket closed due to inactivity for customer_id=%s",
+                        customer_id,
+                    )
+                )
                 try:
-                    await websocket.send_json({
-                        "type": "error",
-                        "message": "Connection closed due to 10 minutes of inactivity. Type a message to reconnect."
-                    })
+                    await websocket.send_json(
+                        {
+                            "type": "error",
+                            "message": "Connection closed due to 10 minutes of inactivity. Type a message to reconnect.",
+                        }
+                    )
                     await websocket.close(code=1000, reason="Inactivity timeout")
                 except Exception:
                     pass
                 break
             except WebSocketDisconnect:
-                logger.info(f"WebSocket disconnected (receive) for customer_id={customer_id}")
+                logger.info(
+                    logger.info(
+                        "WebSocket disconnected (receive) for customer_id=%s",
+                        customer_id,
+                    )
+                )
                 break
             except Exception as e:
-                logger.error(f"Error receiving message: {e}")
+                logger.error("Error receiving message: %s", e)
                 break  # unrecoverable — socket is broken
 
             query: str = data.get("query", "")
@@ -594,19 +662,14 @@ async def chat_ws(websocket: WebSocket, token: str = Query(...), conversation_id
 
             # ── 2b. Rate Limiting ───────────────────────────────────────────
             redis_client = getattr(app_state, "redis", None)
-            if redis_client:
-                key = f"rate_limit:{customer_id}"
-                async with redis_client.pipeline(transaction=True) as pipe:
-                    pipe.incr(key)
-                    pipe.expire(key, 60, nx=True)
-                    results = await pipe.execute()
-            
-                if results[0] > 10:
-                    await websocket.send_json({
-                        "type": "error", 
-                        "message": "Too Many Requests. Please wait a minute before trying again."
-                    })
-                    continue
+            if await check_rate_limit(redis_client, customer_id):
+                await websocket.send_json(
+                    {
+                        "type": "error",
+                        "message": "Too Many Requests. Please wait a minute before trying again.",
+                    }
+                )
+                continue
 
             # ── 2b. Persist conversation record ─────────────────────────────
             try:
@@ -617,11 +680,17 @@ async def chat_ws(websocket: WebSocket, token: str = Query(...), conversation_id
                         VALUES (%s, %s, %s)
                         ON CONFLICT (conversation_id) DO UPDATE SET updated_at = NOW()
                         """,
-                        (thread_id, customer_id, (query[:30] + "...") if len(query) > 30 else query),
+                        (
+                            thread_id,
+                            customer_id,
+                            (query[:30] + "...") if len(query) > 30 else query,
+                        ),
                     )
             except Exception as e:
-                logger.error(f"DB error saving conversation: {e}")
-                await websocket.send_json({"type": "error", "message": "Failed to save conversation."})
+                logger.error("DB error saving conversation: %s", e)
+                await websocket.send_json(
+                    {"type": "error", "message": "Failed to save conversation."}
+                )
                 continue  # not fatal — still try to run the graph
 
             # ── 2c. Subscribe to Pub/Sub channel for this thread (lazy) ──────
@@ -647,38 +716,43 @@ async def chat_ws(websocket: WebSocket, token: str = Query(...), conversation_id
             if is_escalated:
                 # Write user message to history without invoking the graph
                 try:
-                    config = RunnableConfig(configurable={"thread_id": thread_id})
-                
-                    msg_content = [{"type": "text", "text": query}]
-                    if image_base64:
-                        msg_content.append({"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{image_base64}"}})
-                
-                    await app_state.graph.aupdate_state(
-                        config,
-                        {
-                            "messages": [HumanMessage(content=msg_content)],
-                            "customer_id": customer_id,
-                            "query": query,
-                        },
+                    await _record_customer_bypass_message(
+                        thread_id,
+                        query,
+                        image_base64,
+                        customer_id,
+                        app_state.graph,
+                        redis_client,
                     )
-                    if redis_client:
-                        await redis_client.publish("support:events", json.dumps({
-                            "event": "customer_message", 
-                            "conversation_id": thread_id
-                        }))
                 except Exception as e:
-                    logger.error(f"Failed to save human message in escalated state: {e}")
+                    logger.error(
+                        logger.error(
+                            "Failed to save human message in escalated state: %s", e
+                        )
+                    )
                 logger.info(
-                    f"👤 Escalated message saved | customer={customer_id} | query='{query}'"
+                    logger.info(
+                        "👤 Escalated message saved | customer=%s | query='%s'",
+                        customer_id,
+                        query,
+                    )
                 )
                 # Remove the pending '*Thinking...*' message in the UI since AI is bypassed
                 await websocket.send_json({"type": "escalated_ack"})
                 continue
 
             # --- Application-level Response Cache Hit Check (Bypass Graph) ---
-            cached_response = await get_faq_response(customer_id, query) if not image_base64 else None
+            cached_response = (
+                await get_faq_response(customer_id, query) if not image_base64 else None
+            )
             if cached_response:
-                logger.info(f"🟢 FAQ RESPONSE CACHE HIT (Bypass Graph) | customer={customer_id} | query='{query}'")
+                logger.info(
+                    logger.info(
+                        "🟢 FAQ RESPONSE CACHE HIT (Bypass Graph) | customer=%s | query='%s'",
+                        customer_id,
+                        query,
+                    )
+                )
                 try:
                     config = RunnableConfig(configurable={"thread_id": thread_id})
                     await app_state.graph.aupdate_state(
@@ -686,20 +760,31 @@ async def chat_ws(websocket: WebSocket, token: str = Query(...), conversation_id
                         {
                             "messages": [
                                 HumanMessage(content=query),
-                                AIMessage(content=cached_response, name="faq")
+                                AIMessage(content=cached_response, name="faq"),
                             ],
                             "customer_id": customer_id,
                             "query": query,
-                        }
+                        },
                     )
                 except Exception as e:
-                    logger.error(f"Failed to update graph state for cached FAQ response: {e}")
+                    logger.error(
+                        logger.info(
+                            "Failed to update graph state for cached FAQ response: %s",
+                            e,
+                        )
+                    )
 
                 await websocket.send_json({"type": "token", "content": cached_response})
                 await websocket.send_json({"type": "end"})
                 continue
 
-            logger.info(f"WS graph invoke | customer_id={customer_id} | thread_id={thread_id}")
+            logger.info(
+                logger.info(
+                    "WS graph invoke | customer_id=%s | thread_id=%s",
+                    customer_id,
+                    thread_id,
+                )
+            )
 
             # ── 2c. Build graph config ───────────────────────────────────────
             langfuse_handler = CallbackHandler()
@@ -725,8 +810,8 @@ async def chat_ws(websocket: WebSocket, token: str = Query(...), conversation_id
                 current_state = await app_state.graph.aget_state(config)
                 if current_state.next:
                     logger.info(
-                        f"Crash recovery: pending nodes={current_state.next}. "
-                        f"Injecting fresh query and resuming."
+                        "Crash recovery: pending nodes=%s. Injecting fresh query and resuming.",
+                        current_state.next,
                     )
                     await app_state.graph.aupdate_state(
                         config,
@@ -737,7 +822,11 @@ async def chat_ws(websocket: WebSocket, token: str = Query(...), conversation_id
                     state_input = None
             except Exception as e:
                 # Non-fatal: log and proceed with state_input as-is
-                logger.warning(f"Could not check/resume graph state: {e}. Starting fresh.")
+                logger.warning(
+                    logger.info(
+                        "Could not check/resume graph state: %s. Starting fresh.", e
+                    )
+                )
 
             # ── 2e. Stream graph events ──────────────────────────────────────
             # This is isolated in its own try/except so that ANY error during
@@ -746,55 +835,76 @@ async def chat_ws(websocket: WebSocket, token: str = Query(...), conversation_id
             try:
                 tokens_streamed = False
                 pending_agents_count = -1
-                
-                async for event in app_state.graph.astream_events(
-                    state_input,
-                    config=config,
-                    version="v2",
-                ):
-                    event_type = event["event"]
 
-                    if event_type == "on_chat_model_stream":
-                        metadata = event.get("metadata", {})
-                        node = metadata.get("langgraph_node")
-                        if node not in ["faq", "order", "synthesizer"]:
-                            continue
-                            
-                        # Fetch the state once to determine how many agents are running
-                        if pending_agents_count == -1:
-                            current_state = await app_state.graph.aget_state(config)
-                            pending_agents_count = len(current_state.values.get("pending_agents", []))
-                            
-                        # If multiple agents are running, ONLY stream the final synthesizer
-                        if pending_agents_count > 1 and node != "synthesizer":
-                            continue
+                # ── Apply the Global Distributed LLM Lock ─────────────────
+                redis_client = getattr(app_state, "redis", None)
+                if redis_client:
+                    # Global limit of 10 concurrent requests across all 3 workers
+                    llm_semaphore = RedisSemaphore(redis_client, "llm_concurrent", limit=10)
+                else:
+                    llm_semaphore = DummySemaphore()
 
-                        chunk = event["data"]["chunk"]
-                        # chunk.content can be a string or a list of content blocks
-                        content = chunk.content
-                        if isinstance(content, list):
-                            # Extract text from content blocks (e.g. Anthropic format)
-                            content = "".join(
-                                block.get("text", "") if isinstance(block, dict) else str(block)
-                                for block in content
+                async with llm_semaphore:
+                    async for event in app_state.graph.astream_events(
+                        state_input,
+                        config=config,
+                        version="v2",
+                    ):
+                        event_type = event["event"]
+    
+                        if event_type == "on_chat_model_stream":
+                            metadata = event.get("metadata", {})
+                            node = metadata.get("langgraph_node")
+                            if node not in ["faq", "order", "synthesizer"]:
+                                continue
+    
+                            # Fetch the state once to determine how many agents are running
+                            if pending_agents_count == -1:
+                                current_state = await app_state.graph.aget_state(config)
+                                pending_agents_count = len(
+                                    current_state.values.get("pending_agents", [])
+                                )
+    
+                            # If multiple agents are running, ONLY stream the final synthesizer
+                            if pending_agents_count > 1 and node != "synthesizer":
+                                continue
+    
+                            chunk = event["data"]["chunk"]
+                            # chunk.content can be a string or a list of content blocks
+                            content = chunk.content
+                            if isinstance(content, list):
+                                # Extract text from content blocks (e.g. Anthropic format)
+                                content = "".join(
+                                    (
+                                        block.get("text", "")
+                                        if isinstance(block, dict)
+                                        else str(block)
+                                    )
+                                    for block in content
+                                )
+                            if content:
+                                tokens_streamed = True
+                                await websocket.send_json(
+                                    {"type": "token", "content": content}
+                                )
+    
+                        elif event_type == "on_tool_start":
+                            await websocket.send_json(
+                                {
+                                    "type": "tool_start",
+                                    "name": event["name"],
+                                    "inputs": str(event["data"].get("input", {})),
+                                }
                             )
-                        if content:
-                            tokens_streamed = True
-                            await websocket.send_json({"type": "token", "content": content})
-
-                    elif event_type == "on_tool_start":
-                        await websocket.send_json({
-                            "type": "tool_start",
-                            "name": event["name"],
-                            "inputs": str(event["data"].get("input", {})),
-                        })
-
-                    elif event_type == "on_tool_end":
-                        await websocket.send_json({
-                            "type": "tool_end",
-                            "name": event["name"],
-                            "output": str(event["data"].get("output", "")),
-                        })
+    
+                        elif event_type == "on_tool_end":
+                            await websocket.send_json(
+                                {
+                                "type": "tool_end",
+                                "name": event["name"],
+                                "output": str(event["data"].get("output", "")),
+                            }
+                        )
 
                 # If no tokens were streamed (e.g. cache hit or direct supervisor response),
                 # send the last AI message from the final graph state.
@@ -804,11 +914,19 @@ async def chat_ws(websocket: WebSocket, token: str = Query(...), conversation_id
                     if messages:
                         last_msg = messages[-1]
                         if getattr(last_msg, "type", "") == "ai" and last_msg.content:
-                            await websocket.send_json({"type": "token", "content": last_msg.content})
+                            await websocket.send_json(
+                                {"type": "token", "content": last_msg.content}
+                            )
 
                 # Turn complete — signal the client
                 await websocket.send_json({"type": "end"})
-                logger.info(f"Turn complete | customer_id={customer_id} | thread_id={thread_id}")
+                logger.info(
+                    logger.info(
+                        "Turn complete | customer_id=%s | thread_id=%s",
+                        customer_id,
+                        thread_id,
+                    )
+                )
 
                 # ── 2f. Post-turn: check if graph set escalate_to_human ──────
                 try:
@@ -820,32 +938,48 @@ async def chat_ws(websocket: WebSocket, token: str = Query(...), conversation_id
                                 (thread_id,),
                             )
                         if redis_client:
-                            await redis_client.publish("support:events", json.dumps({
-                                "event": "new_escalation", 
-                                "conversation_id": thread_id
-                            }))
-                        logger.info(f"🚨 Conversation escalated to human | thread_id={thread_id}")
+                            await redis_client.publish(
+                                "support:events",
+                                json.dumps(
+                                    {
+                                        "event": "new_escalation",
+                                        "conversation_id": thread_id,
+                                    }
+                                ),
+                            )
+                        logger.info(
+                            logger.info(
+                                "🚨 Conversation escalated to human | thread_id=%s",
+                                thread_id,
+                            )
+                        )
                 except Exception as e:
-                    logger.warning(f"Could not check/update escalation status: {e}")
+                    logger.warning("Could not check/update escalation status: %s", e)
 
             except WebSocketDisconnect:
                 # Client disconnected mid-stream — exit cleanly
-                logger.info(f"Client disconnected mid-stream for customer_id={customer_id}")
+                logger.info(
+                    logger.info(
+                        "Client disconnected mid-stream for customer_id=%s", customer_id
+                    )
+                )
                 break
 
             except asyncio.TimeoutError:
                 logger.error("Graph execution timed out.")
                 try:
-                    await websocket.send_json({
-                        "type": "error",
-                        "message": "Request timed out. Please try again.",
-                    })
+                    await websocket.send_json(
+                        {
+                            "type": "error",
+                            "message": "Request timed out. Please try again.",
+                        }
+                    )
                 except Exception:
                     break  # socket is dead
                 # continue → wait for next message, socket stays open
 
             except Exception as e:
-                logger.error(f"Graph streaming error: {e}", exc_info=True)
+                logger.error("Graph streaming error: %s", e, exc_info=True)
                 try:
                     await websocket.send_json({"type": "error", "message": str(e)})
                 except Exception:
@@ -863,17 +997,27 @@ async def chat_ws(websocket: WebSocket, token: str = Query(...), conversation_id
                 redis_client_ref = pubsub_redis
             try:
                 await redis_client_ref.delete(f"presence:{conversation_id}")
-                await redis_client_ref.publish("support:events", json.dumps({
-                    "event": "customer_offline",
-                    "conversation_id": conversation_id
-                }))
+                await redis_client_ref.publish(
+                    "support:events",
+                    json.dumps(
+                        {
+                            "event": "customer_offline",
+                            "conversation_id": conversation_id,
+                        }
+                    ),
+                )
                 # Also keep legacy event name for backward compat
-                await redis_client_ref.publish("support:events", json.dumps({
-                    "event": "customer_disconnected",
-                    "conversation_id": conversation_id
-                }))
+                await redis_client_ref.publish(
+                    "support:events",
+                    json.dumps(
+                        {
+                            "event": "customer_disconnected",
+                            "conversation_id": conversation_id,
+                        }
+                    ),
+                )
             except Exception as e:
-                logger.error(f"Failed to publish customer offline event: {e}")
+                logger.error("Failed to publish customer offline event: %s", e)
 
         # ── Cleanup Pub/Sub on disconnect ─────────────────────────────────────
         if listener_task:
@@ -888,18 +1032,24 @@ async def chat_ws(websocket: WebSocket, token: str = Query(...), conversation_id
 # HUMAN SUPPORT AGENT API ENDPOINTS
 # ══════════════════════════════════════════════════════════════════════════════
 
-from pydantic import BaseModel as PydanticBaseModel
-from fastapi.responses import HTMLResponse, StreamingResponse
-import asyncio
 import pathlib
+
+from fastapi.responses import HTMLResponse, StreamingResponse
+from pydantic import BaseModel as PydanticBaseModel
 
 
 class SupportReplyRequest(PydanticBaseModel):
+    """Model representing a support reply request. Includes fields for ticket ID, reply content, and optional attachments."""
+
     message: str
     agent_name: str
 
+
 class TypingRequest(PydanticBaseModel):
+    """Pydantic model representing a typing request, containing the fields required to submit a typing operation. Includes validation to ensure request data conforms to expected formats."""
+
     agent_name: str
+
 
 @app.get("/support/stream")
 async def support_stream(request: Request):
@@ -908,7 +1058,9 @@ async def support_stream(request: Request):
     if not redis_client:
         raise HTTPException(status_code=500, detail="Redis not configured")
 
-    shutdown_event: asyncio.Event = getattr(request.app.state, "shutdown_event", asyncio.Event())
+    shutdown_event: asyncio.Event = getattr(
+        request.app.state, "shutdown_event", asyncio.Event()
+    )
 
     # Use a dedicated Redis connection for pub/sub (never share with the pool)
     pubsub_redis = async_redis.Redis.from_url(os.getenv("REDIS_URL"))
@@ -921,7 +1073,9 @@ async def support_stream(request: Request):
     async def _reader():
         try:
             while not shutdown_event.is_set():
-                msg = await pubsub.get_message(ignore_subscribe_messages=True, timeout=0.5)
+                msg = await pubsub.get_message(
+                    ignore_subscribe_messages=True, timeout=0.5
+                )
                 if msg:
                     await queue.put(msg["data"].decode("utf-8"))
                 else:
@@ -984,14 +1138,12 @@ async def list_escalated_conversations(request: Request):
     graph = request.app.state.graph
 
     async with pool.connection() as conn:
-        cursor = await conn.execute(
-            """
+        cursor = await conn.execute("""
             SELECT conversation_id, customer_id, title, updated_at, assigned_agent
             FROM customer_conversations
             WHERE status = 'escalated'
             ORDER BY updated_at DESC
-            """
-        )
+            """)
         rows = await cursor.fetchall()
 
     conversations = []
@@ -1004,14 +1156,18 @@ async def list_escalated_conversations(request: Request):
         except Exception:
             pass
 
-        conversations.append({
-            "conversation_id": conv_id,
-            "customer_id": row["customer_id"],
-            "title": row["title"],
-            "updated_at": row["updated_at"].isoformat() if row["updated_at"] else None,
-            "assigned_agent": row.get("assigned_agent"),
-            "chat_summary": chat_summary,
-        })
+        conversations.append(
+            {
+                "conversation_id": conv_id,
+                "customer_id": row["customer_id"],
+                "title": row["title"],
+                "updated_at": (
+                    row["updated_at"].isoformat() if row["updated_at"] else None
+                ),
+                "assigned_agent": row.get("assigned_agent"),
+                "chat_summary": chat_summary,
+            }
+        )
 
     return conversations
 
@@ -1036,7 +1192,7 @@ async def get_support_conversation_history(conversation_id: str, request: Reques
             continue
         role = "user" if msg_type == "human" else "assistant"
         name = getattr(msg, "name", None)
-        
+
         content_str = ""
         if msg.content:
             if isinstance(msg.content, list):
@@ -1050,11 +1206,13 @@ async def get_support_conversation_history(conversation_id: str, request: Reques
             else:
                 content_str = str(msg.content)
 
-        formatted.append({
-            "role": role,
-            "content": content_str,
-            "name": name,
-        })
+        formatted.append(
+            {
+                "role": role,
+                "content": content_str,
+                "name": name,
+            }
+        )
 
     redis_client = getattr(request.app.state, "redis", None)
     is_online = False
@@ -1083,19 +1241,27 @@ async def join_conversation(conversation_id: str, agent_name: str, request: Requ
         await conn.commit()
 
     # Publish join notification to the customer via Redis Pub/Sub
-    notification = json.dumps({
-        "event": "agent_joined",
-        "content": f"🟢 **{agent_name} (Support Agent) has joined the chat.**",
-    })
+    notification = json.dumps(
+        {
+            "event": "agent_joined",
+            "content": f"🟢 **{agent_name} (Support Agent) has joined the chat.**",
+        }
+    )
     await redis_client.publish(f"chat:reply:{conversation_id}", notification)
-    await redis_client.publish("support:events", json.dumps({"event": "agent_joined", "conversation_id": conversation_id}))
-    logger.info(f"Agent {agent_name} joined conversation {conversation_id}")
+    await redis_client.publish(
+        "support:events",
+        json.dumps({"event": "agent_joined", "conversation_id": conversation_id}),
+    )
+    logger.info("Agent %s joined conversation %s", agent_name, conversation_id)
 
     return {"status": "joined", "agent_name": agent_name}
 
 
 @app.post("/support/conversations/{conversation_id}/reply")
-async def reply_as_human(conversation_id: str, body: SupportReplyRequest, request: Request):
+@observe(name="human_agent_reply", as_type="generation")
+async def reply_as_human(
+    conversation_id: str, body: SupportReplyRequest, request: Request
+):
     """Send a reply as a human support agent."""
     graph = request.app.state.graph
     redis_client = request.app.state.redis
@@ -1115,19 +1281,24 @@ async def reply_as_human(conversation_id: str, body: SupportReplyRequest, reques
     async with pool.connection() as conn:
         await conn.execute(
             "UPDATE customer_conversations SET updated_at = NOW() WHERE conversation_id = %s",
-            (conversation_id,)
+            (conversation_id,),
         )
         await conn.commit()
 
     # 2. Publish the reply to the customer via Redis Pub/Sub
-    notification = json.dumps({
-        "event": "agent_reply",
-        "content": body.message,
-        "agent_name": body.agent_name,
-    })
+    notification = json.dumps(
+        {
+            "event": "agent_reply",
+            "content": body.message,
+            "agent_name": body.agent_name,
+        }
+    )
     await redis_client.publish(f"chat:reply:{conversation_id}", notification)
-    await redis_client.publish("support:events", json.dumps({"event": "agent_reply", "conversation_id": conversation_id}))
-    logger.info(f"Support agent replied to {conversation_id}")
+    await redis_client.publish(
+        "support:events",
+        json.dumps({"event": "agent_reply", "conversation_id": conversation_id}),
+    )
+    logger.info("Support agent replied to %s", conversation_id)
 
     return {"status": "sent"}
 
@@ -1140,7 +1311,7 @@ async def agent_typing(conversation_id: str, req: TypingRequest, request: Reques
         async with pool.connection() as conn:
             await conn.execute(
                 "UPDATE customer_conversations SET updated_at = NOW() WHERE conversation_id = %s",
-                (conversation_id,)
+                (conversation_id,),
             )
             await conn.commit()
 
@@ -1158,10 +1329,12 @@ async def customer_typing(conversation_id: str, request: Request):
     """Broadcast to support agent dashboard that the customer is typing."""
     redis_client = getattr(request.app.state, "redis", None)
     if redis_client:
-        await redis_client.publish("support:events", json.dumps({
-            "event": "customer_typing", 
-            "conversation_id": conversation_id
-        }))
+        await redis_client.publish(
+            "support:events",
+            json.dumps(
+                {"event": "customer_typing", "conversation_id": conversation_id}
+            ),
+        )
     return {"status": "sent"}
 
 
@@ -1185,26 +1358,46 @@ async def resolve_conversation(conversation_id: str, request: Request):
     try:
         state = await graph.aget_state(config)
         chat_summary = state.values.get("chat_summary", "")
-        
+
         if chat_summary and "### Active Issues" in chat_summary:
             import re
-            active_block_match = re.search(r'### Active Issues\n(.*?)(?=\n### )', chat_summary, re.DOTALL)
-            resolved_block_match = re.search(r'### Resolved Issues\n(.*?)(?=\n### )', chat_summary, re.DOTALL)
-            
+
+            active_block_match = re.search(
+                r"### Active Issues\n(.*?)(?=\n### )", chat_summary, re.DOTALL
+            )
+            resolved_block_match = re.search(
+                r"### Resolved Issues\n(.*?)(?=\n### )", chat_summary, re.DOTALL
+            )
+
             if active_block_match and resolved_block_match:
                 active_text = active_block_match.group(1).strip()
                 resolved_text = resolved_block_match.group(1).strip()
-                
+
                 if active_text and active_text != "- None":
                     if resolved_text == "- None":
                         resolved_text = ""
-                    cleaned_active = re.sub(r'- \[Turns Active: \d+\] ', '- ', active_text)
+                    cleaned_active = re.sub(
+                        r"- \[Turns Active: \d+\] ", "- ", active_text
+                    )
                     new_resolved = (resolved_text + "\n" + cleaned_active).strip()
-                    chat_summary = chat_summary[:resolved_block_match.start(1)] + new_resolved + "\n" + chat_summary[resolved_block_match.end(1):]
-                
-                chat_summary = chat_summary[:active_block_match.start(1)] + "- None\n" + chat_summary[active_block_match.end(1):]
-            
-            chat_summary = re.sub(r'### Escalate to Human\n- True', '### Escalate to Human\n- False', chat_summary)
+                    chat_summary = (
+                        chat_summary[: resolved_block_match.start(1)]
+                        + new_resolved
+                        + "\n"
+                        + chat_summary[resolved_block_match.end(1) :]
+                    )
+
+                chat_summary = (
+                    chat_summary[: active_block_match.start(1)]
+                    + "- None\n"
+                    + chat_summary[active_block_match.end(1) :]
+                )
+
+            chat_summary = re.sub(
+                r"### Escalate to Human\n- True",
+                "### Escalate to Human\n- False",
+                chat_summary,
+            )
 
         await graph.aupdate_state(
             config,
@@ -1219,16 +1412,21 @@ async def resolve_conversation(conversation_id: str, request: Request):
             },
         )
     except Exception as e:
-        logger.error(f"Failed to reset escalation state: {e}")
+        logger.error("Failed to reset escalation state: %s", e)
 
     # 3. Notify customer via Redis Pub/Sub
-    notification = json.dumps({
-        "event": "resolved",
-        "content": "✅ *The support agent has resolved this issue. The AI assistant is ready to help you with other questions!*",
-    })
+    notification = json.dumps(
+        {
+            "event": "resolved",
+            "content": "✅ *The support agent has resolved this issue. The AI assistant is ready to help you with other questions!*",
+        }
+    )
     await redis_client.publish(f"chat:reply:{conversation_id}", notification)
-    await redis_client.publish("support:events", json.dumps({"event": "resolved", "conversation_id": conversation_id}))
-    logger.info(f"Conversation {conversation_id} resolved and returned to AI")
+    await redis_client.publish(
+        "support:events",
+        json.dumps({"event": "resolved", "conversation_id": conversation_id}),
+    )
+    logger.info("Conversation %s resolved and returned to AI", conversation_id)
 
     return {"status": "resolved"}
 
@@ -1236,7 +1434,9 @@ async def resolve_conversation(conversation_id: str, request: Request):
 @app.get("/support/dashboard", response_class=HTMLResponse)
 async def support_dashboard():
     """Serve the human support agent dashboard HTML page."""
-    template_path = pathlib.Path(__file__).parent / "templates" / "support_dashboard.html"
+    template_path = (
+        pathlib.Path(__file__).parent / "templates" / "support_dashboard.html"
+    )
     if not template_path.exists():
         raise HTTPException(status_code=404, detail="Dashboard template not found")
     return HTMLResponse(content=template_path.read_text(encoding="utf-8"))

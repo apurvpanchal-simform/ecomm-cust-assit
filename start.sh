@@ -6,7 +6,7 @@ export API_BASE_URL="http://localhost:8000"
 
 echo "Starting FastAPI backend..."
 # Start FastAPI backend in the background
-uvicorn app.main:app --host 0.0.0.0 --port 8000 &
+uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 3 &
 BACKEND_PID=$!
 
 # Wait a moment to ensure backend starts before UI tries to connect

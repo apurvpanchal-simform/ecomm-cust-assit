@@ -25,7 +25,7 @@ _ORDER_TOOLS = [
 ]
 _TOOL_MAP: dict[str, Any] = {t.name: t for t in _ORDER_TOOLS}
 
-SYSTEM_PROMPT = """You are an order support agent. Help customers look up and understand their orders.
+SYSTEM_PROMPT = r"""You are an order support agent. Help customers look up and understand their orders.
 
 ## Tools — pick exactly one per question
 
@@ -200,7 +200,9 @@ async def order_node(state: AgentState, config: RunnableConfig) -> dict:
 
     conversation += recent_messages
 
-    llm = get_llm(temperature=0.1, cache=False)  # Never cache — fetches live user-specific DB data
+    llm = get_llm(
+        temperature=0.1, cache=False
+    )  # Never cache — fetches live user-specific DB data
     agent = llm.bind_tools(_ORDER_TOOLS)
 
     try:

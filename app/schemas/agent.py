@@ -30,6 +30,8 @@ class ToolNotFoundResponse(BaseModel):
 
 
 class Route(BaseModel):
+    """Represents a route with origin and destination points. Inherits from BaseModel to provide validation and serialization."""
+
     pending_agents: list[Literal["faq", "order", "image_search_agent"]] = Field(
         description="The ordered list of agents to execute. Put data-gathering agents first if others depend on them. Return an empty list if the query is ONLY a greeting, chitchat, vague search, or completely out-of-domain."
     )

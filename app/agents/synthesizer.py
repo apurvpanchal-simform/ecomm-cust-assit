@@ -14,7 +14,7 @@ from app.services.llm_factory import get_llm
 
 logger = logging.getLogger(__name__)
 
-SYNTHESIZER_PROMPT = """You are an e-commerce assistant. You receive raw responses from multiple backend agents that ran during a single conversation turn.
+SYNTHESIZER_PROMPT = r"""You are an e-commerce assistant. You receive raw responses from multiple backend agents that ran during a single conversation turn.
 
 ## Task
 Merge all agent responses into one cohesive, natural reply for the user.
@@ -86,7 +86,9 @@ async def synthesizer_node(state: AgentState, config: RunnableConfig) -> dict:
     if len(agent_responses) <= 1:
         return {}
 
-    has_image_context = bool(state.get("image_base64")) or state.get("image_is_safe") is False
+    has_image_context = (
+        bool(state.get("image_base64")) or state.get("image_is_safe") is False
+    )
 
     try:
         llm = get_llm(temperature=0.3, cache=False if has_image_context else None)
@@ -108,5 +110,5 @@ async def synthesizer_node(state: AgentState, config: RunnableConfig) -> dict:
         # The UI will pick this up as the LAST AI message!
         return {"messages": [AIMessage(content=response.content, name="synthesizer")]}
     except Exception as e:
-        logger.exception(f"Synthesizer failed: {e}")
+        logger.exception("Synthesizer failed: %s", e)
         return {}

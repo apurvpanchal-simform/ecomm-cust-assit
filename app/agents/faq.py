@@ -78,8 +78,14 @@ async def faq_node(state: AgentState, config: RunnableConfig) -> dict:
     # --- Application-level Response Cache (5 min TTL) ---
     # Keyed by (customer_id, normalized_query). Works across same-chat repeated questions.
     # Do not cache or check cache if there is an image, OR if an image was blocked for safety.
-    has_image_context = bool(state.get("image_base64")) or state.get("image_is_safe") is False
-    cached_response = await get_faq_response(customer_id, raw_query) if not has_image_context else None
+    has_image_context = (
+        bool(state.get("image_base64")) or state.get("image_is_safe") is False
+    )
+    cached_response = (
+        await get_faq_response(customer_id, raw_query)
+        if not has_image_context
+        else None
+    )
     if cached_response:
         return {
             "messages": [AIMessage(content=cached_response, name="faq")],
