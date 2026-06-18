@@ -20,7 +20,6 @@ class AgentState(TypedDict, total=False):
     executed_agents: list[str]
     escalate_to_human: bool | None
 
-
     # Multimodal search fields
     image_base64: str | None
     image_azure_url: str | None

@@ -34,16 +34,39 @@
 
 ## Architecture
 
-![alt text](ecomm_architecture.png)
+![alt text](e_comm_architecture.png)
 
 The application uses a decoupled frontend-backend architecture:
 - **FastAPI Backend:** Orchestrates LangGraph agents, manages databases, and exposes REST endpoints.
 - **Chainlit Frontend:** A rich, React-based Chat UI providing seamless multimodal interactions.
 - **Persistent WebSockets:** While authentication and chat history use REST, real-time message streaming (including reasoning tokens and tool execution steps) flows over a persistent WebSocket connection between Chainlit and FastAPI.
 
+### LangGraph Workflow
+1. **Entry Point**: Checks if the user uploaded an image. If yes, routes to **Image Analyzer**. Otherwise, routes directly to **Supervisor**.
+2. **Supervisor**: Analyzes user intent and adds relevant sub-agents (`faq`, `order`, `image_search_agent`) to the `pending_agents` queue.
+3. **Sub-Agent Execution**: A conditional router sequentially dispatches tasks to pending agents until all are executed.
+   - The **Image Search** pipeline is a sequential sub-graph: `clip_embedder` ➡️ `image_search` ➡️ `cleanup`.
+4. **Synthesis & Summarization**: Once all agents finish, execution flows to the **Synthesizer** for a unified final answer, then to the **Summarizer** to compress the message history before ending.
+
+### Human Support Handoff
+- **Escalation Trigger**: If a customer explicitly requests human support or an issue takes too many turns, the **Summarizer** node flags the state with `escalate_to_human`.
+- **AI Bypass**: The FastAPI backend transitions the conversation state to `escalated`, routing all subsequent user messages directly to a **Human Support Dashboard** via Redis Pub/Sub, completely bypassing the LangGraph AI.
+- **Resolution**: Once the human support agent resolves the issue, the conversation is un-flagged, and control is returned to the AI assistant.
+
+### Rate Limiting & Concurrency
+
+![Rate Limiting Architecture](rate_limit.png)
+
+The application employs a two-tier protective system as shown in the architecture diagram above:
+1. **User Rate Limiting (Layer 1 - The Front Door):** Middleware tracking JWT tokens limits each user to a maximum of 10 messages per minute. Malicious spikes are blocked immediately with `429 Too Many Requests`.
+2. **Token Bucket LLM Queue (Layer 2 - The LLM Funnel):** To protect the Groq AI Free Tier from rate limit violations, the LangGraph execution is wrapped with a **Distributed Redis Token Bucket**. 
+   - **Strict Limits**: The bucket is configured with a Max Capacity of 25 Tokens and a Refill Rate of 25 Tokens / Minute.
+   - **Dynamic Backpressure**: No matter how many Uvicorn workers are running in the backend cluster, they must all acquire a token from the global Redis bucket before invoking the LLM.
+   - **Seamless Queueing**: If no token is available, the worker calculates the exact wait time required, streams a real-time `queue_wait` websocket event to the Chainlit frontend (displaying *"Waiting for capacity..."*), and sleeps asynchronously until refilled. No requests are lost, and the external API is perfectly protected.
+
 ### Agent Descriptions
 
-| Agent | Purpose |
+| Agent / Node | Purpose |
 |---|---|
 | **Supervisor** | Analyzes user intent and routes to the correct sub-agent(s). Handles greetings and chitchat directly. Supports multi-agent delegation for complex queries. |
 | **FAQ** | Performs semantic search over the knowledge base (shipping, returns, payments, warranties, accounts) using OpenRouter/Gemini embeddings + Qdrant. |
@@ -51,6 +74,7 @@ The application uses a decoupled frontend-backend architecture:
 | **Image Analyzer** | Uses Azure Computer Vision to extract tags and descriptions from user-uploaded images. |
 | **CLIP Embedding** | Converts text queries or images into CLIP embedding vectors for visual similarity search. |
 | **Image Search** | Queries the `product_images` Qdrant collection using multimodal fusion hybrid search to find the most visually similar products. |
+| **Cleanup** | Clears heavy transient state (like base64 images and large embeddings) to keep LangGraph checkpoints lean and fast. |
 | **Synthesizer** | Synthesizes responses when multiple agents are triggered simultaneously. |
 | **Summarizer** | Compresses long conversation histories into concise summaries to stay within LLM context windows. |
 
@@ -72,7 +96,7 @@ The application uses a decoupled frontend-backend architecture:
 |---|---|---|
 | [Groq](https://groq.com/) | `openai/gpt-oss-20b` | Primary inference |
 | [Groq](https://groq.com/) | `openai/gpt-oss-120b` | Fallback 1 |
-| [Groq](https://groq.com/) | `groq-compound-mini` | Fallback 2 |
+| [Google Gemini](https://ai.google.dev/) | `gemini-3.1-flash-lite` | Fallback 2 |
 
 ### Embeddings
 | Provider | Model | Role |
@@ -106,10 +130,16 @@ ecomm-cust-assit/
 ├── .env.example                    # Sample environment variables
 ├── .gitignore                      # Files ignored by git version control
 ├── .python-version                 # Active python version specification
+├── deploy.sh                       # Quick bash deployment script
 ├── Dockerfile                      # Multi-stage container definition
+├── Dockerfile.backend              # Backend specific Docker build
+├── Dockerfile.frontend             # Frontend specific Docker build
 ├── README.md                       # Project overview and instructions
-├── ecomm_architecture.png          # System architecture design diagram
-├── pyproject.toml                  # Project metadata and dependencies (uv)
+├── e_comm_architecture.png         # System architecture design diagram
+├── pyproject.toml                  # Base project metadata
+├── pyproject.backend.toml          # Backend dependencies (uv)
+├── pyproject.frontend.toml         # Frontend dependencies (uv)
+├── rate_limit.png                  # Concurrency & rate-limiting diagram
 ├── start.sh                        # Entrypoint script to start backend & frontend
 ├── uv.lock                         # Pinned dependency versions lockfile
 ├── .github/
@@ -144,7 +174,8 @@ ecomm-cust-assit/
 │   ├── middleware/
 │   │   ├── __init__.py
 │   │   ├── auth.py                 # Bearer JWT validator middleware
-│   │   └── rate_limit.py           # IP/user api rate limiting middleware
+│   │   ├── distributed_lock.py     # Redis Token Bucket & Semaphores
+│   │   └── rate_limit.py           # IP/user API rate limiting & LLM queueing
 │   ├── rag/
 │   │   ├── __init__.py
 │   │   ├── image_retriever.py      # SigLIP + BM25 hybrid search processor
@@ -158,17 +189,21 @@ ecomm-cust-assit/
 │   ├── services/
 │   │   ├── __init__.py
 │   │   ├── dense_embedder.py       # SigLIP embedding inference client
+│   │   ├── faq_response_cache.py   # Redis caching for FAQ answers
 │   │   ├── jwt_auth.py             # JWT token encoding & decoding
 │   │   ├── llm_factory.py          # Model initialization & fallback loader
 │   │   ├── sparse_embedder.py      # BM25 sparse vectors builder
 │   │   ├── storage_service.py      # Azure Blob storage uploads wrapper
 │   │   └── vision_service.py       # Azure Cognitive Vision integration
+│   ├── templates/
+│   │   └── support_dashboard.html  # Human support agent HTML dashboard
 │   └── tools/
 │       ├── __init__.py
 │       ├── faq_search.py           # Qdrant knowledge lookup search tool
 │       ├── order_details.py        # Order contents query backend tool
 │       ├── order_items.py          # Order details lookup sub-tool
 │       └── order_lookup.py         # Customer order index lookup tool
+├── chainlit.md                     # Chainlit UI customized welcome screen
 ├── data/
 │   ├── customers.json              # Sample customer profiles seed
 │   ├── orders.json                 # Sample purchases and tracking seed
@@ -181,6 +216,9 @@ ecomm-cust-assit/
 │       ├── faq_returns.md          # Refund policies and item return procedures
 │       ├── faq_shipping.md         # Carrier details and international shipping FAQs
 │       └── faq_warranties.md       # Product warranty and claims procedures
+├── infrastructure/
+│   └── bicep/
+│       └── main.bicep              # Azure IaC deployment definitions
 ├── ingestion/
 │   ├── __init__.py
 │   ├── create_checkpoint_tables.py # Postgres checkpointer setup script
@@ -188,13 +226,23 @@ ecomm-cust-assit/
 │   ├── ingest_customers.py         # Supabase customers table setup script
 │   ├── ingest_faq.py               # FAQ dense embedding indexing pipeline
 │   ├── ingest_orders.py            # Supabase orders table setup script
-│   └── ingest_products.py          # Supabase products table setup script
+│   ├── ingest_products.py          # Supabase products table setup script
+│   └── utils.py                    # Common ingestion utilities
+├── public/                         # Chainlit UI static assets
+│   ├── avatars/
+│   │   ├── assistant.png           # AI avatar icon
+│   │   └── support_agent.png       # Human support agent avatar icon
+│   ├── custom.css                  # Chainlit custom styling
+│   ├── custom.js                   # Chainlit custom logic
+│   └── logo.png                    # Brand logo
 ├── tests/
 │   ├── __init__.py
 │   └── evaluations/
 │       ├── __init__.py
 │       ├── custom_model.py         # Groq metric evaluator judge model
-│       ├── mock_dataset.py         # RAG evaluation groundtruth dataset
+│       ├── mock_chat_data.py       # Mock conversation scenarios
+│       ├── mock_faq_data.py        # Mock FAQ knowledge data
+│       ├── test_chat_conversations.py # Test suite for chat flow
 │       └── test_faq_rag.py         # Faithfulness & relevancy test suites
 └── ui/
     └── app.py                      # Chainlit interactive chat UI client
@@ -249,6 +297,7 @@ Edit `.env` and fill in all required values:
 | `SUPABASE_KEY` | Supabase service role / anon key |
 | `SUPABASE_DB_URL` | Supabase Postgres database connection string |
 | `REDIS_URL` | Redis connection string (for checkpoint caching) |
+| `API_BASE_URL` | Base URL of the FastAPI backend for the Chainlit frontend (default: `http://localhost:8000`) |
 | `QDRANT_URL` | Qdrant Cloud cluster URL |
 | `QDRANT_API_KEY` | Qdrant Cloud API key |
 | `AZURE_STORAGE_CONNECTION_STRING` | Azure Blob Storage connection string |
@@ -261,6 +310,7 @@ Edit `.env` and fill in all required values:
 | `LANGFUSE_SECRET_KEY` | Langfuse secret key |
 | `LANGFUSE_BASE_URL` | Langfuse base service URL |
 | `HF_TOKEN` | Hugging Face access token (to load CLIP/SigLIP models) |
+| `CHAINLIT_AUTH_SECRET` | Secret key used by Chainlit to authenticate user sessions |
 
 ### 4. Set Up Local Services (Redis & Qdrant)
 
@@ -345,7 +395,7 @@ az ad sp create-for-rbac --name "github-actions" --role contributor \
   --sdk-auth
 ```
 
-#### Deploy
+#### Deploy via GitHub Actions (CI/CD)
 
 Push to `main` or `develop` to trigger an automatic deployment:
 
@@ -359,6 +409,22 @@ The GitHub Actions workflow will:
 3. Build & push the Docker image to ACR
 4. Deploy the new image to Azure Container Apps
 
+#### Deploy Manually (Azure CLI + Bicep)
+
+If you prefer to provision the infrastructure manually instead of using the GitHub Actions pipeline, you can use the provided Bicep template. First, ensure you have built and pushed your Docker images to Azure Container Registry (ACR), then run:
+
+```bash
+az deployment group create \
+  --resource-group <YOUR_RESOURCE_GROUP> \
+  --template-file infrastructure/bicep/main.bicep \
+  --parameters \
+    registryUsername="<ACR_USERNAME>" \
+    registryPassword="<ACR_PASSWORD>" \
+    registryServer="<ACR_NAME>.azurecr.io" \
+    backendImage="<ACR_NAME>.azurecr.io/ecomm-backend:latest" \
+    frontendImage="<ACR_NAME>.azurecr.io/ecomm-frontend:latest"
+```
+
 ---
 
 ## API Reference
@@ -366,22 +432,7 @@ The GitHub Actions workflow will:
 ### Authentication
 
 #### `POST /auth/login`
-
 Authenticate a customer and receive a JWT token.
-
-**Request Body:**
-```json
-{
-  "email": "alice@example.com"
-}
-```
-
-**Response:**
-```json
-{
-  "access_token": "eyJhbGciOiJIUzI1NiIs..."
-}
-```
 
 ---
 
@@ -390,59 +441,40 @@ Authenticate a customer and receive a JWT token.
 All chat endpoints require the `Authorization: Bearer <token>` header.
 
 #### `POST /chat`
-
 Send a message (text and/or image) to the AI assistant.
 
-**Request Body:**
-```json
-{
-  "query": "Where is my latest order?",
-  "conversation_id": "optional-thread-id",
-  "image_base64": null
-}
-```
-
-**Response:** Full LangGraph state including `messages` with the AI's response.
-
 #### `GET /chat/conversations`
-
 List all conversations for the authenticated customer.
 
-**Response:**
-```json
-[
-  {
-    "conversation_id": "abc123",
-    "title": "Where is my latest order...",
-    "updated_at": "2026-06-07T15:30:00Z"
-  }
-]
-```
-
 #### `GET /chat/history/{conversation_id}`
-
 Retrieve the full message history for a specific conversation.
 
-**Response:**
-```json
-{
-  "messages": [
-    { "role": "user", "content": "Where is my order?" },
-    { "role": "assistant", "content": "Your order #ORD-1001 is currently..." }
-  ]
-}
-```
-
 #### `DELETE /chat/conversations/{conversation_id}`
-
 Delete a specific conversation from the history.
 
-**Response:**
-```json
-{
-  "status": "deleted"
-}
-```
+---
+
+### Human Support Agent
+
+Endpoints used by the Human Support Dashboard for managing escalated conversations.
+
+#### `GET /support/stream`
+Server-Sent Events (SSE) endpoint to receive real-time updates (customer typing, new messages, etc.).
+
+#### `GET /support/conversations`
+List all currently escalated conversations waiting for human support.
+
+#### `GET /support/conversations/{conversation_id}/history`
+Retrieve the full message history of an escalated conversation.
+
+#### `POST /support/conversations/{conversation_id}/join`
+Claim an escalated conversation and notify the customer that a human agent has joined.
+
+#### `POST /support/conversations/{conversation_id}/reply`
+Send a reply to the customer as a human support agent.
+
+#### `POST /support/conversations/{conversation_id}/resolve`
+Resolve an escalated conversation and seamlessly return control back to the LangGraph AI assistant.
 
 ---
 
@@ -451,51 +483,13 @@ Delete a specific conversation from the history.
 All orders and products endpoints require the `Authorization: Bearer <token>` header.
 
 #### `GET /orders`
-
 Fetch the list of all orders belonging to the authenticated customer.
 
-**Response:**
-```json
-[
-  {
-    "id": "ord-1001",
-    "customer_id": "cust-abc",
-    "status": "shipped",
-    "payment_status": "paid",
-    "total": 21.87,
-    "ordered_at": "2026-06-07T15:30:00Z",
-    "items": [...]
-  }
-]
-```
-
 #### `GET /products`
-
 Fetch the complete product catalog.
 
-**Response:**
-```json
-[
-  {
-    "id": 1,
-    "title": "Fjallraven - Foldsack No. 1 Backpack",
-    "description": "Your perfect pack for everyday use...",
-    "price": 109.95,
-    "image": "https://..."
-  }
-]
-```
-
 #### `GET /health`
-
 Retrieve backend system health status.
-
-**Response:**
-```json
-{
-  "status": "ok"
-}
-```
 
 ---
 
