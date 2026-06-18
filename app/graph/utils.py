@@ -36,7 +36,6 @@ def filter_tool_messages(messages: list) -> list:
                 filtered.append(
                     AIMessage(
                         content=content,
-                        name=getattr(msg, "name", None),
                     )
                 )
             # Otherwise just drop the message (it was a pure tool-call)

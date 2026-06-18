@@ -29,7 +29,7 @@ Analyze the 'Previous Summary' (if provided) and the 'New messages to incorporat
    - If a new issue is introduced in the new messages, add it to `active_issues` with `turns_active` initialized to 2.
    - If an issue is resolved in the new messages, DO NOT list it in `active_issues`; instead, move it to `resolved_issues`.
 5. **Resolved Issues**: List issues or questions that have been successfully resolved, answered, or completed.
-6. **Escalate to Human**: Set `escalate_to_human` to `True` if the user explicitly asks to speak to a human/agent/support, OR if any active issue has `turns_active >= 6`. Otherwise, set it to `False`.
+6. **Escalate to Human**: Set `escalate_to_human` to `True` IF either of these conditions are met: (a) the user explicitly asks to speak to a human/agent/support AND there is at least one unresolved active issue in `active_issues`; OR (b) the AI Assistant's response advises the user to contact the support team, help desk, or a human agent. CRITICAL: DO NOT set escalate_to_human to True for the same resolved issue if the conversation history shows that a human support agent recently resolved that issue (e.g. indicated by a SYSTEM message).
 """
 
 
@@ -63,7 +63,7 @@ class StructuredSummary(BaseModel):
         description="List of issues/questions that have been successfully answered or completed."
     )
     escalate_to_human: bool = Field(
-        description="Set to true if the user explicitly asks for a human agent OR if any active issue's turns_active has reached the threshold (>= 6)."
+        description="Set to true ONLY IF the user explicitly asks for a human agent AND there is an active unresolved issue. Do not escalate if there are no active issues."
     )
 
 
@@ -136,6 +136,30 @@ async def summarizer_node(state: AgentState, config: RunnableConfig) -> dict:
     # We want to keep the last WINDOW_SIZE messages completely unsummarized.
     # To prevent "telephone" effect, we wait until we have CHUNK_SIZE extra messages
     # before we run the summarizer.
+
+    # HEURISTIC CHECK: Always check the unsummarized messages for immediate escalation or resolution.
+    # We search backwards to find the MOST RECENT event.
+    unsummarized_messages = all_messages[summarized_count:]
+    heuristic_escalate = None
+    for msg in reversed(unsummarized_messages):
+        content = getattr(msg, "content", "") or ""
+        msg_type = getattr(msg, "type", "")
+        
+        # 1. Did the system recently resolve it?
+        if msg_type == "system" and "human support agent has resolved" in content.lower():
+            logger.info("[SUMMARIZER] Heuristic override: SYSTEM resolution detected → False")
+            heuristic_escalate = False
+            break
+            
+        # 2. Did the AI recently offer human support?
+        if msg_type == "ai":
+            lower_content = content.lower()
+            trigger_phrases = ["contact support", "human agent", "live agent", "support team", "help desk", "representative"]
+            if any(p in lower_content for p in trigger_phrases):
+                logger.info("[SUMMARIZER] Heuristic override: AI offered support → True")
+                heuristic_escalate = True
+                break
+
     if len(all_messages) - summarized_count >= WINDOW_SIZE + CHUNK_SIZE:
         messages_to_grab = CHUNK_SIZE
         messages_to_summarize = all_messages[
@@ -175,6 +199,21 @@ async def summarizer_node(state: AgentState, config: RunnableConfig) -> dict:
             )
             new_summary = _format_summary_to_markdown(structured_summary)
 
+            # The LLM's opinion is used only if the heuristic didn't trigger
+            escalate_flag = structured_summary.escalate_to_human
+            if heuristic_escalate is not None:
+                escalate_flag = heuristic_escalate
+                if not escalate_flag:
+                    new_summary = new_summary.replace(
+                        "### Escalate to Human\n- True",
+                        "### Escalate to Human\n- False",
+                    )
+                else:
+                    new_summary = new_summary.replace(
+                        "### Escalate to Human\n- False",
+                        "### Escalate to Human\n- True",
+                    )
+
             logger.info(
                 f"\n========== NEW CHAT SUMMARY ==========\n{new_summary}\n======================================\n"
             )
@@ -192,15 +231,21 @@ async def summarizer_node(state: AgentState, config: RunnableConfig) -> dict:
             return {
                 "chat_summary": new_summary,
                 "summarized_message_count": new_summarized_count,
-                "escalate_to_human": structured_summary.escalate_to_human,
+                "escalate_to_human": escalate_flag,
             }
         except Exception as e:
-            logging.getLogger(__name__).exception(f"[SUMMARIZER] LLM Error: {e}")
-            return {}
+            logger.error("Failed to generate summary: %s", e)
+            state_update = {}
+            if heuristic_escalate is not None:
+                state_update["escalate_to_human"] = heuristic_escalate
+            return state_update
+    else:
+        # If no summarization is needed, apply heuristic if found
+        state_update = {}
+        if heuristic_escalate is not None:
+            state_update["escalate_to_human"] = heuristic_escalate
 
-    # If no summarization is needed, return an empty dict (state unchanged)
-
-    logging.getLogger(__name__).debug(
-        f"[SUMMARIZER] Sleeping. Total msgs: {len(all_messages)}, Summarized: {summarized_count}"
-    )
-    return {}
+        logging.getLogger(__name__).debug(
+            f"[SUMMARIZER] Sleeping. Total msgs: {len(all_messages)}, Summarized: {summarized_count}"
+        )
+        return state_update

@@ -171,7 +171,7 @@ async def order_node(state: AgentState, config: RunnableConfig) -> dict:
 
     if not customer_id:
         msg = "Unable to verify your identity. Please sign in and try again."
-        new_msgs = [AIMessage(content=msg, name="order")]
+        new_msgs = [AIMessage(content=msg)]
         return {
             "messages": new_msgs,
             "error": "missing_customer_id",
@@ -220,14 +220,16 @@ async def order_node(state: AgentState, config: RunnableConfig) -> dict:
                 break
 
         if final_ai_idx != -1:
-            # Add name="order" to the final AI message from the tool loop
-            new_messages[final_ai_idx] = AIMessage(
-                content=new_messages[final_ai_idx].content, name="order"
-            )
+            # DO NOT add name="order" here! Groq's API throws a 400 error
+            # if an AIMessage has a 'name' field when passed back into the conversation
+            # history on subsequent turns.
+            pass
 
     except Exception as exc:
+        import logging
+        logging.error("order_node failed: %s", exc, exc_info=True)
         resolution_text = "I encountered an error while trying to process your order. Please try again."
-        new_messages = [AIMessage(content=resolution_text, name="order")]
+        new_messages = [AIMessage(content=resolution_text)]
         error = str(exc)
 
     return {

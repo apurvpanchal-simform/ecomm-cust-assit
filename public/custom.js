@@ -12,39 +12,57 @@ document.head.appendChild(style);
 // Setup customer typing indicator
 let lastCustomerTypingTime = 0;
 
+function getConversationId() {
+    // The welcome message injects a hidden zero-width link: [​](http://conversation-id/{conv_id})
+    // This is always the most reliable source of the conversation ID
+    const links = document.querySelectorAll('a[href^="http://conversation-id/"]');
+    if (links.length > 0) {
+        const parts = links[0].href.split('/');
+        return parts[parts.length - 1];
+    }
+
+    // Fallback: try the URL path for /thread/<uuid> style Chainlit URLs
+    const pathParts = window.location.pathname.split('/');
+    const threadIdx = pathParts.indexOf('thread');
+    if (threadIdx !== -1 && pathParts[threadIdx + 1]) {
+        return pathParts[threadIdx + 1];
+    }
+
+    return null;
+}
+
+function getBackendUrl() {
+    // If already on port 8000 (direct API access) use same origin
+    // Otherwise swap the chainlit port (8501) for the backend port (8000)
+    const origin = window.location.origin;
+    if (origin.includes(':8501')) {
+        return origin.replace(':8501', ':8000');
+    }
+    // In production both are on the same origin
+    return origin;
+}
+
 document.addEventListener('input', (e) => {
-    // Chainlit uses a textarea with id "chat-input" or similar class for input
+    // Chainlit uses a textarea for the chat input
     if (e.target.tagName.toLowerCase() === 'textarea') {
         const now = Date.now();
         if (now - lastCustomerTypingTime < 2000) return; // Throttle to 2s
         lastCustomerTypingTime = now;
         
-        let convId = null;
-        const pathParts = window.location.pathname.split('/');
-        if (pathParts.includes('thread')) {
-            convId = pathParts[pathParts.length - 1];
-        } else {
-            const links = document.querySelectorAll('a[href^="http://conversation-id/"]');
-            if (links.length > 0) {
-                const parts = links[0].href.split('/');
-                convId = parts[parts.length - 1];
-            }
-        }
+        const convId = getConversationId();
 
         // Only send if we have a conversation id, meaning it's an established chat
         if (convId && convId !== '') {
             console.debug("Customer typing detected for conversation:", convId);
-            // Note: API_BASE is the backend server, typically running on 8000
-            // Since custom.js runs on 8501 (Chainlit), we need to send to port 8000
-            const backendUrl = window.location.origin.replace('8501', '8000');
-            fetch(`${backendUrl}/chat/conversations/${convId}/typing/customer`, {
+            fetch(`${getBackendUrl()}/chat/conversations/${convId}/typing/customer`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({})
             }).catch(err => {
-                // Ignore errors (could be CORS if not configured, but should be fine locally)
                 console.debug("Failed to send typing event", err);
             });
+        } else {
+            console.debug("Customer typing: no conversation ID found yet, skipping.");
         }
     }
 });

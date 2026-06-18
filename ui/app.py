@@ -1071,6 +1071,7 @@ async def on_chat_start():
     # The connection will be lazily established on the first message sent.
     ws_session = SessionWebSocket(token, conv_id, context_var.get())
     cl.user_session.set("ws_session", ws_session)
+    await ws_session.connect()
 
     # Check history of this conversation
     history_data = await api_fetch_history(token, conv_id)

@@ -84,6 +84,8 @@ async def lifespan(app: FastAPI):
         async with (
             AsyncConnectionPool(
                 supabase_db_url,
+                min_size=1,
+                max_size=4,
                 kwargs={
                     "autocommit": True,
                     "prepare_threshold": 0,
@@ -559,6 +561,8 @@ async def _record_customer_bypass_message(
         config,
         {
             "messages": [HumanMessage(content=msg_content)],
+            # Do NOT reset escalate_to_human here — the conversation is still escalated.
+            # It will be reset by the /resolve endpoint when the agent resolves.
             "customer_id": customer_id,
             "query": query,
         },
@@ -690,6 +694,19 @@ async def chat_ws(
                 listener_task = asyncio.create_task(
                     _redis_pubsub_listener(pubsub, websocket)
                 )
+                # Also mark customer as online now that we know the thread_id
+                redis_client_lazy = getattr(app_state, "redis", None)
+                if redis_client_lazy:
+                    try:
+                        await redis_client_lazy.set(f"presence:{thread_id}", "online")
+                        await redis_client_lazy.publish(
+                            "support:events",
+                            json.dumps(
+                                {"event": "customer_online", "conversation_id": thread_id}
+                            ),
+                        )
+                    except Exception:
+                        pass
 
             # ── 2d. Escalation bypass — route to human, skip AI ──────────────
             try:
@@ -785,6 +802,7 @@ async def chat_ws(
                 "query": query,
                 "customer_id": customer_id,
                 "messages": [HumanMessage(content=query)],
+                "escalate_to_human": False,
                 "image_base64": image_base64 or None,
                 # Reset ephemeral image state so previous-turn safety blocks
                 # don't leak into the current turn.
@@ -1208,6 +1226,7 @@ async def get_support_conversation_history(conversation_id: str, request: Reques
     if redis_client:
         try:
             val = await redis_client.get(f"presence:{conversation_id}")
+            logger.info("Presence check for %s: val=%s", conversation_id, val)
             if val == b"online" or val == "online":
                 is_online = True
         except Exception:

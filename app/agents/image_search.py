@@ -74,7 +74,7 @@ async def image_search_node(state: Any) -> dict:
                 msg += f"![{title}]({image_url})\n\n"
             msg += "---\n\n"
 
-    new_messages = [AIMessage(content=msg, name="image_search_agent")]
+    new_messages = [AIMessage(content=msg)]
 
     return {
         "image_results": final_results,

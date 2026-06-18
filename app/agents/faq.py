@@ -88,7 +88,7 @@ async def faq_node(state: AgentState, config: RunnableConfig) -> dict:
     )
     if cached_response:
         return {
-            "messages": [AIMessage(content=cached_response, name="faq")],
+            "messages": [AIMessage(content=cached_response)],
             "error": None,
             "executed_agents": state.get("executed_agents", []) + ["faq"],
             "faq_chunks": [],
@@ -140,7 +140,7 @@ async def faq_node(state: AgentState, config: RunnableConfig) -> dict:
     try:
         response = await llm.ainvoke(conversation, config=config)
         resolution_text = str(response.content).strip()
-        new_messages = [AIMessage(content=resolution_text, name="faq")]
+        new_messages = [AIMessage(content=resolution_text)]
         error = None
         # Only cache when the FAQ search actually returned chunks.
         # faq_chunks=[] means Qdrant was unavailable or found nothing, so the
@@ -151,7 +151,7 @@ async def faq_node(state: AgentState, config: RunnableConfig) -> dict:
 
     except Exception as exc:
         resolution_text = "I encountered an error while trying to process your request. Please try again."
-        new_messages = [AIMessage(content=resolution_text, name="faq")]
+        new_messages = [AIMessage(content=resolution_text)]
         error = str(exc)
 
     return {

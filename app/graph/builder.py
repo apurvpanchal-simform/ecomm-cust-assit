@@ -30,7 +30,7 @@ def route_supervisor(state: AgentState) -> str:
     """Returns the next node to execute from the state."""
     next_node = state.get("next", "FINISH")
     if next_node == "FINISH":
-        return END
+        return "summarizer"
     return next_node
 
 
@@ -65,7 +65,7 @@ builder.add_conditional_edges(
         "order": "order",
         "image_search_agent": "clip_embedder",
         "synthesizer": "synthesizer",
-        END: END,
+        "summarizer": "summarizer",
     },
 )
 
