@@ -57,7 +57,7 @@ class AsyncDualCheckpointer(BaseCheckpointSaver):
                 if cursor == 0:
                     break
         except Exception as e:
-            logger.error(f"Failed to set Redis TTL for thread {thread_id}: {e}")
+            logger.error("Failed to set Redis TTL for thread %s: %s", thread_id, e)
 
     async def aget_tuple(
         self,
@@ -78,7 +78,7 @@ class AsyncDualCheckpointer(BaseCheckpointSaver):
 
         thread_id = config.get("configurable", {}).get("thread_id")
 
-        logger.info(f"THREAD_ID={thread_id}")
+        logger.info("THREAD_ID=%s", thread_id)
 
         tuple_ = await self.redis_saver.aget_tuple(config)
 
@@ -103,7 +103,7 @@ class AsyncDualCheckpointer(BaseCheckpointSaver):
                 thread_id = tuple_.config.get("configurable", {}).get("thread_id")
                 await self._expire_thread_keys(thread_id)
             except Exception as e:
-                logger.error(f"Failed to warm Redis cache: {e}")
+                logger.error("Failed to warm Redis cache: %s", e)
         else:
             logger.info("❌ SUPABASE READ MISS (aget_tuple)")
 
@@ -269,7 +269,11 @@ class AsyncDualCheckpointer(BaseCheckpointSaver):
                     import json
 
                     logger.info(
-                        f"💾 Writing human-readable JSON state log for thread_id={thread_id}, node={step_node}"
+                        logger.info(
+                            "💾 Writing human-readable JSON state log for thread_id=%s, node=%s",
+                            thread_id,
+                            step_node,
+                        )
                     )
 
                     async with self.pool.connection() as conn:
@@ -295,7 +299,9 @@ class AsyncDualCheckpointer(BaseCheckpointSaver):
                         )
             except Exception as e:
                 logger.warning(
-                    f"⚠️ Failed to write JSON checkpoint log: {e}", exc_info=True
+                    logger.error(
+                        "⚠️ Failed to write JSON checkpoint log: %s", e, exc_info=True
+                    )
                 )
 
         # Prune old checkpoints from Redis — keep only the latest one.
@@ -311,10 +317,19 @@ class AsyncDualCheckpointer(BaseCheckpointSaver):
         writes: Sequence[Tuple[str, Any]],
         task_id: str,
     ) -> None:
+        """Asynchronously writes data according to the given RunnableConfig.
+
+        Args:
+            config: Configuration for the runnable operation.
+
+        Returns:
+            None. The operation completes when all writes are finished.
+        """
         # Only write intermediate states to Postgres.
         logger.info("🐘 SUPABASE WRITE (aput_writes)")
         await self.postgres_saver.aput_writes(config, writes, task_id)
 
     def get_next_version(self, current: Optional[str], channel: Any) -> str:
+        """Return the next version string derived from the current version and channel. If current is None, compute the initial version for the channel."""
         # Delegate version generation to one of the underlying savers
         return self.postgres_saver.get_next_version(current, channel)

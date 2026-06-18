@@ -10,6 +10,8 @@ from pydantic import BaseModel
 
 
 class OrderSummary(BaseModel):
+    """Represents a summary of an order, including its total amount, item count, and current status, with validation and serialization provided by Pydantic's BaseModel."""
+
     order_id: str
     status: str
     payment_status: str
@@ -30,6 +32,8 @@ class OrderSummary(BaseModel):
 
 
 class CustomerOrdersResponse(BaseModel):
+    """Response model for customer orders, including order details and pagination metadata."""
+
     customer_id: str
     orders: list[OrderSummary]
 
@@ -89,6 +93,8 @@ class OrderItemMatch(BaseModel):
 
 
 class OrderItemSearchResponse(BaseModel):
+    """Response model for order item search queries, containing a list of matching OrderItem objects and pagination information."""
+
     customer_id: str
     keyword: str
     matches: list[OrderItemMatch]

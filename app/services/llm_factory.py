@@ -7,20 +7,13 @@ import os
 
 from dotenv import load_dotenv
 from langchain_core.embeddings import Embeddings
-from langchain_google_genai import GoogleGenerativeAIEmbeddings
+from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmbeddings
 from langchain_groq import ChatGroq
-from langchain_openai import ChatOpenAI, OpenAIEmbeddings
+from langchain_openai import OpenAIEmbeddings
 
 load_dotenv()
 
 logger = logging.getLogger(__name__)
-
-
-def estimate_tokens(texts) -> int:
-    """Roughly estimate tokens (chars / 4)."""
-    if isinstance(texts, str):
-        return max(1, len(texts) // 4)
-    return sum(max(1, len(t) // 4) for t in texts)
 
 
 class FallbackEmbeddings(Embeddings):
@@ -33,38 +26,48 @@ class FallbackEmbeddings(Embeddings):
         self.fallback_name = fallback_name
 
     def embed_documents(self, texts):
+        """Generate embeddings for a list of documents.
+
+        Args:
+            texts (list[str]): Documents to embed.
+
+        Returns:
+            list[np.ndarray]: Embedding vectors for each document."""
         try:
             res = self.primary.embed_documents(texts)
             return res
         except Exception as e:
-            logger.warning(f"Primary embedding failed, using fallback: {e}")
+            logger.warning("Primary embedding failed, using fallback: %s", e)
             res = self.fallback.embed_documents(texts)
             return res
 
     def embed_query(self, text):
+        """Embeds the given query text into a vector representation using the model's embedding layer. Returns the resulting embedding vector as a NumPy array."""
         try:
             res = self.primary.embed_query(text)
             return res
         except Exception as e:
-            logger.warning(f"Primary embedding failed, using fallback: {e}")
+            logger.warning("Primary embedding failed, using fallback: %s", e)
             res = self.fallback.embed_query(text)
             return res
 
     async def aembed_documents(self, texts):
+        """Asynchronously embed a list of text documents and return their vector representations. Returns a list of embedding vectors, one for each input text."""
         try:
             res = await self.primary.aembed_documents(texts)
             return res
         except Exception as e:
-            logger.warning(f"Primary async embedding failed, using fallback: {e}")
+            logger.warning("Primary async embedding failed, using fallback: %s", e)
             res = await self.fallback.aembed_documents(texts)
             return res
 
     async def aembed_query(self, text):
+        """Embeds the provided text asynchronously and returns its embedding vector."""
         try:
             res = await self.primary.aembed_query(text)
             return res
         except Exception as e:
-            logger.warning(f"Primary async embedding failed, using fallback: {e}")
+            logger.warning("Primary async embedding failed, using fallback: %s", e)
             res = await self.fallback.aembed_query(text)
             return res
 
@@ -85,19 +88,25 @@ def get_llm(temperature=0.0, cache: bool | None = None):
         extra_kwargs["cache"] = cache
 
     primary_llm = ChatGroq(
-        model="openai/gpt-oss-20b", temperature=temperature, max_retries=2, timeout=15.0,
+        model="openai/gpt-oss-20b",
+        temperature=temperature,
+        max_retries=3,
+        timeout=15.0,
         **extra_kwargs,
     )
 
     fallback_1_llm = ChatGroq(
-        model="openai/gpt-oss-120b", temperature=temperature, max_retries=2, timeout=15.0,
+        model="openai/gpt-oss-120b",
+        temperature=temperature,
+        max_retries=3,
+        timeout=15.0,
         **extra_kwargs,
     )
 
-    fallback_2_llm = ChatGroq(
-        model="groq/compound",
+    fallback_2_llm = ChatGoogleGenerativeAI(
+        model="gemini-3.1-flash-lite",
         temperature=temperature,
-        max_retries=2,
+        max_retries=3,
         timeout=15.0,
         **extra_kwargs,
     )
