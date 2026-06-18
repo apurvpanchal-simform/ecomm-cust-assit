@@ -38,7 +38,12 @@ async def image_search_node(state: Any) -> dict:
     has_real_image = bool(state.get("image_base64"))
 
     logger.info(
-        f"🔍 Image Search Request -> Query: '{search_query}', Filters: {active_filters}, Has Image: {has_real_image}"
+        logger.info(
+            "🔍 Image Search Request -> Query: '%s', Filters: %s, Has Image: %s",
+            search_query,
+            active_filters,
+            has_real_image,
+        )
     )
 
     retriever = ImageRetriever()

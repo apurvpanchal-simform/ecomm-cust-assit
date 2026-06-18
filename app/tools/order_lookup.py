@@ -42,9 +42,7 @@ async def get_customer_orders(
     """
     supabase = await get_supabase_client()
 
-    query = (
-        supabase.table("orders")
-        .select("""
+    query = supabase.table("orders").select("""
             id,
             status,
             payment_status,
@@ -62,9 +60,7 @@ async def get_customer_orders(
             payment,
             shipment,
             notes
-            """)
-        .eq("customer_id", customer_id)
-    )
+            """).eq("customer_id", customer_id)
 
     if status:
         status = status.replace("-", "_").lower()

@@ -11,6 +11,10 @@ from transformers import AutoModel, AutoProcessor
 
 @lru_cache(maxsize=1)
 def load_clip_model():
+    """Loads the CLIP model and returns it for inference.
+
+    Returns:
+        torch.nn.Module: The pretrained CLIP model ready for use."""
     model_name = os.getenv("CLIP_MODEL", "google/siglip-base-patch16-224")
     hf_token = os.getenv("HF_TOKEN")
     try:
@@ -31,6 +35,7 @@ def load_clip_model():
 
 
 def embed_image_bytes(image_bytes: bytes) -> list[float]:
+    """Embeds an image from raw bytes into a vector representation. Returns a list of floats representing the embedding."""
     model, processor = load_clip_model()
     image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
     inputs = processor(images=image, return_tensors="pt")
@@ -42,6 +47,7 @@ def embed_image_bytes(image_bytes: bytes) -> list[float]:
 
 
 def embed_image_base64(b64_str: str) -> list[float]:
+    """Embeds a base64-encoded image string into a vector representation and returns the embedding as a list of floats. The function decodes the image, processes it through a neural network, and outputs the resulting feature vector."""
     return embed_image_bytes(base64.b64decode(b64_str))
 
 

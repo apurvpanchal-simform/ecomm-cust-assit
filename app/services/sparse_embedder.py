@@ -6,6 +6,7 @@ from fastembed import SparseTextEmbedding
 
 @lru_cache(maxsize=1)
 def load_sparse_model():
+    """Loads and returns a pre-trained sparse model from the default storage location. The returned model is a scipy.sparse matrix suitable for inference."""
     # Load the highly optimized Qdrant BM25 model
     model = SparseTextEmbedding("Qdrant/bm25")
     return model
