@@ -72,8 +72,7 @@ async def supervisor_node(state: AgentState, config: RunnableConfig) -> dict:
             "next": "FINISH",
             "messages": [
                 AIMessage(
-                    content="I am escalating this conversation to a human support agent. A representative will be with you shortly.",
-                    name="supervisor",
+                    content="I am escalating this conversation to a human support agent. A representative will be with you shortly."
                 )
             ],
             "faq_chunks": [],
@@ -224,6 +223,6 @@ async def supervisor_node(state: AgentState, config: RunnableConfig) -> dict:
     }
 
     if response_text and pending_str:
-        return_dict["messages"] = [AIMessage(content=response_text, name="supervisor")]
+        return_dict["messages"] = [AIMessage(content=response_text)]
 
     return return_dict

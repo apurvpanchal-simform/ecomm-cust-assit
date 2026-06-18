@@ -108,7 +108,7 @@ async def synthesizer_node(state: AgentState, config: RunnableConfig) -> dict:
 
         # Append the final synthesized message.
         # The UI will pick this up as the LAST AI message!
-        return {"messages": [AIMessage(content=response.content, name="synthesizer")]}
+        return {"messages": [AIMessage(content=response.content)]}
     except Exception as e:
         logger.exception("Synthesizer failed: %s", e)
         return {}
