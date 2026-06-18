@@ -43,14 +43,14 @@ def _ensure_container_exists(client: BlobServiceClient, container: str):
             container_client.create_container(public_access="blob")
         except Exception as e:
             logging.getLogger(__name__).warning(
-                f"Could not create public container, falling back to private: {e}"
+                "Could not create public container, falling back to private: %s", e
             )
             try:
                 # Fallback to private container
                 container_client.create_container()
             except Exception as e2:
                 logging.getLogger(__name__).warning(
-                    f"Failed to create private container: {e2}"
+                    "Failed to create private container: %s", e2
                 )
 
 

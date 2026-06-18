@@ -18,6 +18,7 @@ logger = logging.getLogger(__name__)
 
 
 def build_filters(active_filters: dict | None):
+    """Builds and returns a list of filter objects based on the provided active_filters dictionary, or an empty list if active_filters is None."""
     if not active_filters:
         return None
     conditions = []
@@ -34,6 +35,8 @@ def build_filters(active_filters: dict | None):
 
 
 class ImageRetriever:
+    """Retrieves images from a specified source, providing methods to fetch and cache image data efficiently."""
+
     def __init__(self):
         self.qdrant = get_qdrant_client()
 
@@ -63,13 +66,16 @@ class ImageRetriever:
                 tags_text = " ".join(image_tags)
                 combined_text = f"{search_query} {tags_text}"
                 logger.info(
-                    f"Using Image Tags + Query for Sparse Keyword Search: {combined_text}"
+                    logger.info(
+                        "Using Image Tags + Query for Sparse Keyword Search: %s",
+                        combined_text,
+                    )
                 )
                 sparse_vector = embed_sparse_text(combined_text)
             else:
                 sparse_vector = embed_sparse_text(search_query)
         except Exception as e:
-            logger.error(f"Failed to embed text: {e}")
+            logger.error("Failed to embed text: %s", e)
 
         ranked_dict = {}
 
@@ -138,7 +144,7 @@ class ImageRetriever:
                         )
                     logger.info(log_msg)
                 except Exception as e:
-                    logger.warning(f"Failed to log image results: {e}")
+                    logger.warning("Failed to log image results: %s", e)
 
             if text_vector:
                 try:
@@ -159,7 +165,7 @@ class ImageRetriever:
                         )
                     logger.info(log_msg)
                 except Exception as e:
-                    logger.warning(f"Failed to log text results: {e}")
+                    logger.warning("Failed to log text results: %s", e)
 
             if sparse_vector and sparse_vector.get("indices"):
                 try:
@@ -180,11 +186,14 @@ class ImageRetriever:
                         )
                     logger.info(log_msg)
                 except Exception as e:
-                    logger.warning(f"Failed to log sparse results: {e}")
+                    logger.warning("Failed to log sparse results: %s", e)
 
             # 4. Execute Qdrant Query Fusion
             logger.info(
-                f"🚀 Executing Qdrant Multi-Vector RRF Fusion Search with {len(prefetch_queries)} vector modalities."
+                logger.info(
+                    "🚀 Executing Qdrant Multi-Vector RRF Fusion Search with %s vector modalities.",
+                    len(prefetch_queries),
+                )
             )
 
             response = await self.qdrant.query_points(
@@ -215,5 +224,5 @@ class ImageRetriever:
             return candidates
 
         except Exception as e:
-            logger.exception(f"Image search error: {e}")
+            logger.exception("Image search error: %s", e)
             return []

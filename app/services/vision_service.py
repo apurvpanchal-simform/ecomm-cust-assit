@@ -52,7 +52,7 @@ def analyze_image_bytes(image_bytes: bytes) -> dict:
 
         caption = result.caption.text if result.caption else ""
         tags = [tag.name for tag in result.tags.list] if result.tags else []
-        logger.info(f"-> Extracted Tags: {tags}")
+        logger.info("-> Extracted Tags: %s", tags)
 
         ocr_lines = []
         if result.read and result.read.blocks:
@@ -60,16 +60,24 @@ def analyze_image_bytes(image_bytes: bytes) -> dict:
                 for line in block.lines:
                     ocr_lines.append(line.text)
         ocr_text = " ".join(ocr_lines)
-        logger.info(f"-> Extracted OCR/Description: {ocr_text}")
+        logger.info("-> Extracted OCR/Description: %s", ocr_text)
         logger.info("==============================================\n")
 
         return {"caption": caption, "tags": tags, "ocr_text": ocr_text}
     except Exception as e:
-        logger.exception(f"Azure Vision analysis failed: {e}")
+        logger.exception("Azure Vision analysis failed: %s", e)
         return {"caption": "", "tags": [], "ocr_text": ""}
 
 
 def analyze_image_base64(b64_str: str) -> dict:
+    """Analyze a base64-encoded image and return a dictionary of analysis results.
+
+    Args:
+        b64_str: Base64-encoded image string.
+
+    Returns:
+        dict: Analysis results such as image dimensions, color histogram, and detected objects.
+    """
     return analyze_image_bytes(base64.b64decode(b64_str))
 
 
@@ -97,11 +105,18 @@ def vectorize_image_bytes(image_bytes: bytes) -> list[float]:
         response.raise_for_status()
         return response.json().get("vector", [])
     except Exception as e:
-        logger.exception(f"Azure Vision vectorizeImage failed: {e}")
+        logger.exception("Azure Vision vectorizeImage failed: %s", e)
         return []
 
 
 def vectorize_image_base64(b64_str: str) -> list[float]:
+    """Converts a base64‑encoded image into a numeric feature vector.
+
+    Args:
+        b64_str: Base64 string representing the image.
+
+    Returns:
+        List of floats representing the image embedding."""
     return vectorize_image_bytes(base64.b64decode(b64_str))
 
 
@@ -119,10 +134,10 @@ def vectorize_text(text: str) -> list[float]:
     headers = {"Ocp-Apim-Subscription-Key": key, "Content-Type": "application/json"}
 
     try:
-        logger.info(f"Hitting Azure AI Vision for Text Embedding: '{text}'")
+        logger.info("Hitting Azure AI Vision for Text Embedding: '%s'", text)
         response = requests.post(url, headers=headers, json={"text": text})
         response.raise_for_status()
         return response.json().get("vector", [])
     except Exception as e:
-        logger.exception(f"Azure Vision vectorizeText failed: {e}")
+        logger.exception("Azure Vision vectorizeText failed: %s", e)
         return []

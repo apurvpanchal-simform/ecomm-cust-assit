@@ -57,8 +57,8 @@ async def image_analyzer_node(state: AgentState) -> dict:
 
         image_description = " | ".join(description_parts) if description_parts else None
 
-        logger.info(f"Azure CV Extracted Tags: {tags}")
-        logger.info(f"Azure CV Extracted OCR/Caption: {image_description}")
+        logger.info("Azure CV Extracted Tags: %s", tags)
+        logger.info("Azure CV Extracted OCR/Caption: %s", image_description)
 
         UNSAFE_TAGS = {
             "weapon",
@@ -77,7 +77,7 @@ async def image_analyzer_node(state: AgentState) -> dict:
         unsafe_found = any(tag.lower() in UNSAFE_TAGS for tag in tags)
 
         if unsafe_found:
-            logger.warning(f"Safety violation blocked image with tags: {tags}")
+            logger.warning("Safety violation blocked image with tags: %s", tags)
             return {
                 "image_base64": None,
                 "image_is_safe": False,
@@ -93,5 +93,5 @@ async def image_analyzer_node(state: AgentState) -> dict:
             "image_is_safe": True,
         }
     except Exception as e:
-        logger.exception(f"Image analyzer failed: {e}")
+        logger.exception("Image analyzer failed: %s", e)
         return {}

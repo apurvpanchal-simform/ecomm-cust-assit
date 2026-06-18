@@ -34,7 +34,7 @@ async def clip_embedding_node(state: Any) -> dict:
     if state.get("image_base64"):
         logger.info("🖼️ Uploaded image detected. Routing to SigLIP Image Encoder...")
         vector = await asyncio.to_thread(embed_image_base64, state["image_base64"])
-        logger.info(f"✅ Generated Dense Image Vector (dim: {len(vector)})")
+        logger.info("✅ Generated Dense Image Vector (dim: %s)", len(vector))
         return {"image_embedding": vector}
 
     # If no image, we check if there's a search_query to search visually
@@ -45,8 +45,11 @@ async def clip_embedding_node(state: Any) -> dict:
 
     # Embed the text using SigLIP2 to search for images matching the text
     logger.info(
-        f"📝 Text-only query detected ('{user_text}'). Routing to SigLIP Text Encoder..."
+        logger.info(
+            "📝 Text-only query detected ('%s'). Routing to SigLIP Text Encoder...",
+            user_text,
+        )
     )
     vector = await asyncio.to_thread(embed_text, user_text)
-    logger.info(f"✅ Generated Dense Text Vector (dim: {len(vector)})")
+    logger.info("✅ Generated Dense Text Vector (dim: %s)", len(vector))
     return {"image_embedding": vector}
