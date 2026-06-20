@@ -2,9 +2,16 @@
 Rate limiting middleware for the chat API.
 """
 
+import asyncio
+import logging
+
 from fastapi import Depends, HTTPException, Request
+from langchain_core.callbacks import AsyncCallbackHandler
+from langchain_core.callbacks.manager import adispatch_custom_event
 
 from app.middleware.auth import get_current_customer
+
+logger = logging.getLogger(__name__)
 
 
 async def check_rate_limit(redis_client, customer_id: str, limit: int = 10) -> bool:
@@ -22,6 +29,11 @@ async def check_rate_limit(redis_client, customer_id: str, limit: int = 10) -> b
     if not redis_client:
         return False
 
+    ban_key = f"banned:{customer_id}"
+    is_banned = await redis_client.get(ban_key)
+    if is_banned:
+        raise HTTPException(status_code=403, detail="You have been temporarily banned for spamming.")
+
     key = f"rate_limit:{customer_id}"
 
     async with redis_client.pipeline(transaction=True) as pipe:
@@ -29,7 +41,14 @@ async def check_rate_limit(redis_client, customer_id: str, limit: int = 10) -> b
         pipe.expire(key, 60, nx=True)
         results = await pipe.execute()
 
-    return results[0] > limit
+    requests_in_minute = results[0]
+
+    # Spam threshold: if they hit 20 requests in a minute, ban them for 24 hours
+    if requests_in_minute >= 20:
+        await redis_client.setex(ban_key, 86400, "1")
+        raise HTTPException(status_code=403, detail="You have been temporarily banned for spamming.")
+
+    return requests_in_minute > limit
 
 
 async def rate_limit_customer(
@@ -61,12 +80,6 @@ async def rate_limit_customer(
 
     return customer_id
 
-import asyncio
-import logging
-from langchain_core.callbacks import AsyncCallbackHandler
-from langchain_core.callbacks.manager import adispatch_custom_event
-
-logger = logging.getLogger(__name__)
 
 class RateLimitCallbackHandler(AsyncCallbackHandler):
     """
@@ -82,8 +95,12 @@ class RateLimitCallbackHandler(AsyncCallbackHandler):
             return
             
         wait_time = await self.token_bucket.acquire()
+        
+        # Get the name of the LLM/Agent if available
+        agent_name = kwargs.get("name", "Unknown Agent")
+        
         if wait_time > 0:
-            logger.info("LLM Queue: Burst capacity reached. Waiting %.1fs.", wait_time)
+            logger.info("LLM Queue: Burst capacity reached. Waiting %.1fs for %s.", wait_time, agent_name)
             # We add a buffer of 0.5s to be safe
             wait_time += 0.5
             msg = f"High traffic... Waiting {wait_time:.1f}s for LLM capacity..."
@@ -92,7 +109,7 @@ class RateLimitCallbackHandler(AsyncCallbackHandler):
             await adispatch_custom_event("queue_wait_start", {"message": msg})
             await asyncio.sleep(wait_time)
             await adispatch_custom_event("queue_wait_end", {"message": "Resumed!"})
-            logger.info("LLM Queue: Resumed after %.1fs wait.", wait_time)
+            logger.info("LLM Queue: Resumed and token acquired for %s after %.1fs wait.", agent_name, wait_time)
         else:
-            logger.debug("LLM Queue: Slot acquired immediately.")
+            logger.info("LLM Queue: Token acquired immediately for %s.", agent_name)
 
