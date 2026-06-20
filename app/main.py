@@ -787,8 +787,10 @@ async def chat_ws(
             langfuse_handler = CallbackHandler()
             
             redis_client = getattr(app_state, "redis", None)
-            # 25 RPM for safety (25 tokens max burst, 25 tokens / 60 seconds fill rate)
-            token_bucket = RedisTokenBucket(redis_client, "llm_rate_limit", capacity=25, fill_rate=25/60) if redis_client else None
+            # 30 RPM limit optimized for LangGraph:
+            # 4 tokens per standard pipeline. Capacity 8 handles 2 concurrent users instantly.
+            # Fill rate 22/60 ensures Max Burst (8) + 1-Min Drip (22) = exactly 30 requests per minute max.
+            token_bucket = RedisTokenBucket(redis_client, "llm_rate_limit", capacity=8, fill_rate=22/60) if redis_client else None
             rate_limiter_callback = RateLimitCallbackHandler(token_bucket)
 
             config = RunnableConfig(
