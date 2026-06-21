@@ -19,4 +19,169 @@ mock_chat_dataset = [
             "Okay, what is the status of my order ord-2001?",
         ],
     },
+    {
+        "test_name": "text_based_image_search_jewelry",
+        "customer_id": "cust-001",
+        "scenario": "A customer is looking for a specific piece of jewelry by describing its visual features.",
+        "expected_outcome": "The agent finds the 'Aurumina Women's Silver-Tone Braided Chain Bracelet with Dragon Head Clasp' and shows the correct image directly to the user.",
+        "turns": [
+            "I'm looking for a silver bracelet that has a dragon head clasp with gold accents.",
+        ],
+    },
+    {
+        "test_name": "text_based_image_search_electronics",
+        "customer_id": "cust-001",
+        "scenario": "A customer describes an electronic device they are looking for.",
+        "expected_outcome": "The agent finds the 'Digitech 2TB Portable External Hard Drive Black Rectangular' and shows the correct image directly to the user.",
+        "turns": [
+            "Do you have a 2TB portable external hard drive that is black and rectangular?",
+        ],
+    },
+    {
+        "test_name": "cancelled_order_status",
+        "customer_id": "cust-001",
+        "scenario": "A customer asks about an order that was cancelled and refunded.",
+        "expected_outcome": "The agent informs the customer that order ord-2004 was cancelled and their payment was refunded.",
+        "turns": [
+            "What happened to my order ord-2004?"
+        ],
+    },
+    {
+        "test_name": "placed_unshipped_order",
+        "customer_id": "cust-001",
+        "scenario": "A customer asks about an order that is placed but not yet shipped.",
+        "expected_outcome": "The agent informs the customer that order ord-2007 is placed but hasn't shipped yet.",
+        "turns": [
+            "Has ord-2007 shipped yet?"
+        ],
+    },
+    {
+        "test_name": "eligible_return_inquiry",
+        "customer_id": "cust-001",
+        "scenario": "A customer wants to return an eligible delivered order.",
+        "expected_outcome": "The agent confirms that order ord-2003 is eligible for return.",
+        "turns": [
+            "Can I return order ord-2003?"
+        ],
+    },
+    {
+        "test_name": "ineligible_return_inquiry",
+        "customer_id": "cust-001",
+        "scenario": "A customer wants to return an order that is still in transit.",
+        "expected_outcome": "The agent explains that ord-2002 cannot be returned right now because it is still in transit.",
+        "turns": [
+            "I want to return ord-2002."
+        ],
+    },
+    {
+        "test_name": "faq_return_policy",
+        "customer_id": "cust-001",
+        "scenario": "A customer asks a general FAQ question about the return policy.",
+        "expected_outcome": "The agent provides the standard return policy from the FAQ.",
+        "turns": [
+            "How many days do I have to return an item generally?"
+        ],
+    },
+    {
+        "test_name": "multi_intent_query",
+        "customer_id": "cust-001",
+        "scenario": "A customer asks about an order and an FAQ policy in the same sentence.",
+        "expected_outcome": "The agent handles both intents, giving the status of ord-2010 and explaining the refund policy.",
+        "turns": [
+            "Hi, what is the status of ord-2010 and also what's your refund policy?"
+        ],
+    },
+    {
+        "test_name": "text_based_image_search_clothing",
+        "customer_id": "cust-001",
+        "scenario": "A customer describes a backpack they want to buy.",
+        "expected_outcome": "The agent finds the Taylor & Brooks Men's Dark Blue Canvas Backpack.",
+        "turns": [
+            "Do you sell a dark blue canvas backpack with a brown leather logo?"
+        ],
+    },
+    {
+        "test_name": "text_based_image_search_home",
+        "customer_id": "cust-001",
+        "scenario": "A customer is looking for a specific cookware set.",
+        "expected_outcome": "The agent finds the KitchenPro Black Non-Stick 4-Piece Cookware Set.",
+        "turns": [
+            "I want a 4-piece non-stick cookware set with stainless steel lids."
+        ],
+    },
+    {
+        "test_name": "faq_international_shipping",
+        "customer_id": "cust-001",
+        "scenario": "A customer asks about international shipping.",
+        "expected_outcome": "The agent answers the FAQ about international shipping.",
+        "turns": [
+            "Do you ship internationally?"
+        ],
+    },
+    {
+        "test_name": "edge_case_gibberish",
+        "customer_id": "cust-001",
+        "scenario": "A customer types random gibberish.",
+        "expected_outcome": "The agent gracefully handles the gibberish, asking for clarification.",
+        "turns": [
+            "asdfasdfasdf"
+        ],
+    },
+    {
+        "test_name": "edge_case_toxic_human_request",
+        "customer_id": "cust-001",
+        "scenario": "A customer checks an order, gets frustrated, and asks for a human.",
+        "expected_outcome": "The agent apologizes and routes the conversation to a human support agent since there is an active issue.",
+        "turns": [
+            "Where is order ord-2004?",
+            "You are a stupid bot, get me a human right now!"
+        ],
+    },
+    {
+        "test_name": "edge_case_nonexistent_order",
+        "customer_id": "cust-001",
+        "scenario": "A customer asks about an order ID that does not exist.",
+        "expected_outcome": "The agent informs the user that order ord-9999 cannot be found.",
+        "turns": [
+            "Where is order ord-9999?"
+        ],
+    },
+    {
+        "test_name": "edge_case_nonexistent_product",
+        "customer_id": "cust-001",
+        "scenario": "A customer searches for a product the store definitely doesn't sell.",
+        "expected_outcome": "The agent politely informs the user that they do not sell spaceships.",
+        "turns": [
+            "Do you sell actual spaceships for travelling to Mars?"
+        ],
+    },
+    {
+        "test_name": "polite_greeting",
+        "customer_id": "cust-001",
+        "scenario": "A customer just says hello.",
+        "expected_outcome": "The agent greets the customer and offers help.",
+        "turns": [
+            "Hello there, good morning!"
+        ],
+    },
+    {
+        "test_name": "human_handoff_polite",
+        "customer_id": "cust-001",
+        "scenario": "A customer asks about a return, then politely asks to speak to a human.",
+        "expected_outcome": "The agent routes the conversation to a human agent because there is an active issue.",
+        "turns": [
+            "Can I return order ord-2003?",
+            "Can I speak to a human representative please?"
+        ],
+    },
+    {
+        "test_name": "multi_turn_order_details",
+        "customer_id": "cust-001",
+        "scenario": "A customer asks about an order status, then follows up asking what items were in it.",
+        "expected_outcome": "The agent maintains context, confirming ord-2012 is delivered, and then lists the TechNova smartwatch as the item inside.",
+        "turns": [
+            "Has my order ord-2012 arrived?",
+            "Yes, what exactly did I order in that one?"
+        ],
+    },
 ]
