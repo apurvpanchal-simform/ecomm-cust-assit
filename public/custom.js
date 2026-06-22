@@ -1,9 +1,10 @@
 // Inject custom CSS to hide avatars for tool calls
 const style = document.createElement('style');
 style.textContent = `
-    .step-message .message-avatar,
-    div[data-test="step"] .message-avatar,
-    .step-avatar {
+    .cl-step-avatar,
+    .step-avatar,
+    .cl-step .MuiAvatar-root,
+    .cl-step .MuiSkeleton-root {
         display: none !important;
     }
 `;

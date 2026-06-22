@@ -25,7 +25,7 @@ SYSTEM_PROMPT = """You are a FAQ support agent for an e-commerce platform. You a
 ## Rules
 1. Always use the `search_faq` tool to retrieve context before answering.
 2. Answer strictly from the retrieved context—never invent policies or facts.
-3. If the answer isn't in the context, say so and suggest contacting human support.
+3. If the answer isn't in the context, say so, suggest contacting human support, and politely inform the user that you are escalating the conversation to a human support representative.
 4. If the context or data you need is already in the conversation summary, use it directly without a duplicate tool call.
 5. If `search_faq` returns an error, do NOT retry. Apologize and explain the service is temporarily unavailable.
 6. If you receive a "specific task for this turn", prioritize that task over unrelated conversation.
@@ -119,8 +119,6 @@ async def faq_node(state: AgentState, config: RunnableConfig) -> dict:
     )
 
     conversation = [SystemMessage(content=SYSTEM_PROMPT)]
-
-    conversation.append(SystemMessage(content=f"Current Customer ID: {customer_id}"))
 
     chat_summary = state.get("chat_summary", "")
     if chat_summary:

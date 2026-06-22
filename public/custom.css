@@ -22,3 +22,11 @@
   scrollbar-width: thin;
   scrollbar-color: #4b5563 transparent;
 }
+
+/* Hide avatars and loading skeletons for tool calls / steps */
+.cl-step-avatar,
+.step-avatar,
+.cl-step .MuiAvatar-root,
+.cl-step .MuiSkeleton-root {
+  display: none !important;
+}

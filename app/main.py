@@ -1348,6 +1348,62 @@ async def customer_typing(conversation_id: str, request: Request):
     return {"status": "sent"}
 
 
+def move_active_to_resolved_in_summary(chat_summary: str) -> str:
+    if not chat_summary:
+        return chat_summary
+
+    import re
+    lines = chat_summary.split("\n")
+    sections = {}
+    current_section = None
+
+    for line in lines:
+        stripped = line.strip()
+        if stripped.startswith("### "):
+            current_section = stripped[4:].strip()
+            sections[current_section] = []
+        elif current_section is not None and stripped:
+            sections[current_section].append(stripped)
+
+    # If we don't have both sections, return as is
+    if "Active Issues" not in sections or "Resolved Issues" not in sections:
+        return chat_summary
+
+    # Get active issues lines
+    active_issues = [l for l in sections["Active Issues"] if l.startswith("-") and l != "- None"]
+
+    if not active_issues:
+        return chat_summary
+
+    # Clean up active issues (remove [Turns Active: X])
+    cleaned_active = []
+    for issue in active_issues:
+        cleaned = re.sub(r"^-\s*\[Turns Active:\s*\d+\]\s*", "- ", issue)
+        cleaned_active.append(cleaned)
+
+    # Get resolved issues lines
+    resolved_issues = [l for l in sections["Resolved Issues"] if l.startswith("-") and l != "- None"]
+
+    # Merge them
+    merged_resolved = resolved_issues + cleaned_active
+
+    # Update sections dict
+    sections["Active Issues"] = ["- None"]
+    sections["Resolved Issues"] = merged_resolved
+    if "Escalate to Human" in sections:
+        sections["Escalate to Human"] = ["- False"]
+
+    # Reconstruct the summary
+    new_lines = []
+    for sec_name, sec_lines in sections.items():
+        new_lines.append(f"### {sec_name}")
+        for l in sec_lines:
+            new_lines.append(l)
+        new_lines.append("") # blank line between sections
+
+    return "\n".join(new_lines).strip()
+
+
 @app.post("/support/conversations/{conversation_id}/resolve")
 async def resolve_conversation(conversation_id: str, request: Request):
     """Resolve an escalated conversation and return it to AI handling."""
@@ -1369,45 +1425,8 @@ async def resolve_conversation(conversation_id: str, request: Request):
         state = await graph.aget_state(config)
         chat_summary = state.values.get("chat_summary", "")
 
-        if chat_summary and "### Active Issues" in chat_summary:
-            import re
-
-            active_block_match = re.search(
-                r"### Active Issues\n(.*?)(?=\n### )", chat_summary, re.DOTALL
-            )
-            resolved_block_match = re.search(
-                r"### Resolved Issues\n(.*?)(?=\n### )", chat_summary, re.DOTALL
-            )
-
-            if active_block_match and resolved_block_match:
-                active_text = active_block_match.group(1).strip()
-                resolved_text = resolved_block_match.group(1).strip()
-
-                if active_text and active_text != "- None":
-                    if resolved_text == "- None":
-                        resolved_text = ""
-                    cleaned_active = re.sub(
-                        r"- \[Turns Active: \d+\] ", "- ", active_text
-                    )
-                    new_resolved = (resolved_text + "\n" + cleaned_active).strip()
-                    chat_summary = (
-                        chat_summary[: resolved_block_match.start(1)]
-                        + new_resolved
-                        + "\n"
-                        + chat_summary[resolved_block_match.end(1) :]
-                    )
-
-                chat_summary = (
-                    chat_summary[: active_block_match.start(1)]
-                    + "- None\n"
-                    + chat_summary[active_block_match.end(1) :]
-                )
-
-            chat_summary = re.sub(
-                r"### Escalate to Human\n- True",
-                "### Escalate to Human\n- False",
-                chat_summary,
-            )
+        if chat_summary:
+            chat_summary = move_active_to_resolved_in_summary(chat_summary)
 
         await graph.aupdate_state(
             config,

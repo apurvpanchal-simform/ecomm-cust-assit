@@ -160,6 +160,29 @@ async def summarizer_node(state: AgentState, config: RunnableConfig) -> dict:
                 heuristic_escalate = True
                 break
 
+    # If the heuristic wants to escalate, we verify there is actually an active unresolved issue.
+    # If there are no active issues in the history summary AND the AI did not explicitly
+    # confirm connection/escalation in the current turn, we block the escalation.
+    if heuristic_escalate:
+        has_active_issues = False
+        if current_summary:
+            import re
+            match = re.search(r"### Active Issues\n(.*?)(?:\n###|$)", current_summary, re.DOTALL)
+            if match:
+                block = match.group(1).strip()
+                if block and "- None" not in block:
+                    has_active_issues = True
+        if not has_active_issues:
+            for msg in unsummarized_messages:
+                if getattr(msg, "type", "") == "ai":
+                    content_lower = (msg.content or "").lower()
+                    if any(phrase in content_lower for phrase in ["connecting you", "escalating this", "representative will be", "transferring you"]):
+                        has_active_issues = True
+                        break
+        if not has_active_issues:
+            logger.info("[SUMMARIZER] Heuristic requested escalation, but blocked because no active issues were found.")
+            heuristic_escalate = False
+
     if len(all_messages) - summarized_count >= WINDOW_SIZE + CHUNK_SIZE:
         messages_to_grab = CHUNK_SIZE
         messages_to_summarize = all_messages[

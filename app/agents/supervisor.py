@@ -30,14 +30,15 @@ SUPERVISOR_SYSTEM_PROMPT = """You are a routing supervisor for an e-commerce sup
 4. For vague shopping queries ("show me everything"), return empty `pending_agents` and ask for clarification in `response`.
 5. For greetings, thanks, or chitchat, return empty `pending_agents` and a warm 1-2 sentence `response`.
 6. Never answer the user's actual question yourself—only route or respond to chitchat.
+7. If the user asks to speak to a human support agent, representative, live support, or wants to escalate their issue, only route to a downstream agent (like order or faq) if they mention a specific issue (e.g., a broken item, refund, tracking). If they do not mention any specific issue, return empty `pending_agents`, and in `response` politely explain that you can connect them to a human agent once they describe the specific issue they need help with.
 
 ## Execution Rules
-7. Order `pending_agents` by dependency: if Agent B needs Agent A's output, list A first.
-8. Provide a precise `sub_queries` entry for every agent you trigger, telling it exactly what to do this turn.
+8. Order `pending_agents` by dependency: if Agent B needs Agent A's output, list A first.
+9. Provide a precise `sub_queries` entry for every agent you trigger, telling it exactly what to do this turn.
 
 ## Search Filters (when routing to `image_search_agent`)
-9. Extract a clean `search_query` combining user intent and image description. Exclude price terms from the query.
-10. Set `min_price` / `max_price` if the user mentions a budget (e.g., "under $50" → max_price=50).
+10. Extract a clean `search_query` combining user intent and image description. Exclude price terms from the query.
+11. Set `min_price` / `max_price` if the user mentions a budget (e.g., "under $50" → max_price=50).
 
 ## Synthesis
 A downstream synthesizer will merge all agent responses with your `response` field into one reply for the user. Write naturally.
@@ -137,11 +138,6 @@ async def supervisor_node(state: AgentState, config: RunnableConfig) -> dict:
 
     summarized_count = state.get("summarized_message_count", 0)
     recent_messages = filter_tool_messages(messages[summarized_count:])
-
-    customer_id = state.get("customer_id", "guest")
-    supervisor_messages.append(
-        SystemMessage(content=f"Current Customer ID: {customer_id}")
-    )
 
     if recent_messages:
         supervisor_messages.append(

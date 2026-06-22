@@ -6,7 +6,6 @@ import base64
 import logging
 import os
 
-import requests
 from azure.ai.vision.imageanalysis import ImageAnalysisClient
 from azure.ai.vision.imageanalysis.models import VisualFeatures
 from azure.core.credentials import AzureKeyCredential
@@ -79,65 +78,3 @@ def analyze_image_base64(b64_str: str) -> dict:
         dict: Analysis results such as image dimensions, color histogram, and detected objects.
     """
     return analyze_image_bytes(base64.b64decode(b64_str))
-
-
-def vectorize_image_bytes(image_bytes: bytes) -> list[float]:
-    """Generates a 1024d multimodal embedding using Azure AI Vision (Florence)."""
-    endpoint = os.getenv("AZURE_VISION_ENDPOINT")
-    key = os.getenv("AZURE_VISION_KEY")
-    if not endpoint or not key:
-        logger.warning("Azure Vision credentials missing for embeddings.")
-        return []
-
-    # Ensure endpoint ends with a slash
-    if not endpoint.endswith("/"):
-        endpoint += "/"
-
-    url = f"{endpoint}computervision/retrieval:vectorizeImage?api-version=2024-02-01&model-version=2023-04-15"
-    headers = {
-        "Ocp-Apim-Subscription-Key": key,
-        "Content-Type": "application/octet-stream",
-    }
-
-    try:
-        logger.info("Hitting Azure AI Vision for Image Embedding...")
-        response = requests.post(url, headers=headers, data=image_bytes)
-        response.raise_for_status()
-        return response.json().get("vector", [])
-    except Exception as e:
-        logger.exception("Azure Vision vectorizeImage failed: %s", e)
-        return []
-
-
-def vectorize_image_base64(b64_str: str) -> list[float]:
-    """Converts a base64‑encoded image into a numeric feature vector.
-
-    Args:
-        b64_str: Base64 string representing the image.
-
-    Returns:
-        List of floats representing the image embedding."""
-    return vectorize_image_bytes(base64.b64decode(b64_str))
-
-
-def vectorize_text(text: str) -> list[float]:
-    """Generates a 1024d multimodal embedding using Azure AI Vision (Florence)."""
-    endpoint = os.getenv("AZURE_VISION_ENDPOINT")
-    key = os.getenv("AZURE_VISION_KEY")
-    if not endpoint or not key:
-        return []
-
-    if not endpoint.endswith("/"):
-        endpoint += "/"
-
-    url = f"{endpoint}computervision/retrieval:vectorizeText?api-version=2024-02-01&model-version=2023-04-15"
-    headers = {"Ocp-Apim-Subscription-Key": key, "Content-Type": "application/json"}
-
-    try:
-        logger.info("Hitting Azure AI Vision for Text Embedding: '%s'", text)
-        response = requests.post(url, headers=headers, json={"text": text})
-        response.raise_for_status()
-        return response.json().get("vector", [])
-    except Exception as e:
-        logger.exception("Azure Vision vectorizeText failed: %s", e)
-        return []

@@ -7,7 +7,6 @@ import asyncio
 import logging
 from typing import Any
 
-# from app.services.vision_service import vectorize_image_base64, vectorize_text
 from langfuse import observe
 
 from app.services.dense_embedder import embed_image_base64, embed_text

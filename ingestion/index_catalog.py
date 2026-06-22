@@ -20,7 +20,6 @@ from app.db.qdrant import ensure_product_images_collection, get_qdrant_client
 from app.services.dense_embedder import embed_image_bytes
 from app.services.sparse_embedder import embed_sparse_text
 
-# from app.services.vision_service import vectorize_image_bytes
 from app.services.storage_service import upload_product_image
 
 load_dotenv(override=True)
