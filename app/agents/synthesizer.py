@@ -1,5 +1,13 @@
 """
-Agent node that synthesizes outputs from multiple sub-agents into a single, cohesive user response.
+Agent node that synthesizes outputs from multiple sub-agents into a single reply.
+
+`synthesizer_node` runs after all sub-agents (FAQ, Order, Image Search) have
+completed their work.  It is a no-op if only one agent ran (its response is
+already user-ready).  When multiple agents ran, it uses an LLM to merge their
+individual responses into one cohesive, natural reply.
+
+Note: The synthesizer runs even on single-agent turns (it just returns {}),
+so the graph topology remains uniform regardless of how many agents were invoked.
 """
 
 import logging
@@ -8,59 +16,41 @@ from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_core.runnables import RunnableConfig
 from langfuse import observe
 
+from app.config.llm_config import SYNTHESIZER_LLM_CONFIG
 from app.graph.state import AgentState
-from app.graph.utils import filter_tool_messages, get_message_text
+from app.graph.utils import filter_ai_messages, filter_tool_messages, get_message_text
+from app.prompts import SYNTHESIZER_PROMPT
 from app.services.llm_factory import get_llm
 
 logger = logging.getLogger(__name__)
-
-SYNTHESIZER_PROMPT = """You are an e-commerce assistant. You receive raw responses from multiple backend agents that ran during a single conversation turn.
-
-## Task
-Merge all agent responses into one cohesive, natural reply for the user.
-
-## Rules
-1. Combine information naturally—don't mechanically list each agent's output.
-2. If one response is a refusal (e.g., "I can't help with coding"), weave it in gracefully alongside valid information.
-3. Never invent facts—use only what the agents provided.
-4. Keep the tone warm and helpful.
-5. NEVER use inline code (backticks `) to format labels or monetary amounts (e.g., do NOT write `Subtotal: \`$10\`` or `\`**Tax**\``). Use standard bold text instead.
-6. If any agent's response indicates that the conversation is being escalated/transferred to a human agent, ensure the synthesized response clearly confirms to the user that they are being connected to a human representative.
-"""
 
 
 @observe(name="synthesizer_node")
 async def synthesizer_node(state: AgentState, config: RunnableConfig) -> dict:
     """
-    Synthesizes multiple agent responses into a single, cohesive response.
-
-    This node acts as the final step in a multi-agent conversation turn before summarization.
-    It evaluates the AI messages generated in the current turn. If multiple sub-agents
-    (e.g., FAQ and Order) were triggered by the supervisor, this node takes their disparate
-    responses and uses an LLM to merge them into a single, natural, and helpful reply for the user.
+    Merge multiple sub-agent responses into a single cohesive user-facing reply.
 
     Flow:
-    1. Identifies the last human message in the state to isolate the current conversation turn.
-    2. Collects all AI messages generated after that human message, filtering out tool calls.
-    3. Excludes the supervisor's routing/greeting message from the agent count to accurately
-       determine if multiple sub-agents ran.
-    4. If 1 or 0 sub-agents ran, it skips synthesis and returns an empty dict (allowing the
-       single agent's message to be presented directly to the user).
-    5. If multiple sub-agents ran, it constructs a prompt containing all their raw responses
-       and invokes the LLM to generate a unified response.
-    6. Appends the newly synthesized message to the state, tagged with `name="synthesizer"`.
+    1. Find the index of the last HumanMessage to isolate the current turn.
+    2. Collect all AI messages generated after that human message.
+    3. Exclude the supervisor's optional greeting/routing message from the count.
+    4. If ≤ 1 agent ran, return {} (no synthesis needed — the agent's message stands).
+    5. If multiple agents ran, format their responses and invoke the LLM to merge them.
+    6. Append the synthesized AIMessage to the state as the final visible response.
 
     Args:
-        state (AgentState): The global state of the LangGraph containing the conversation history.
-        config (RunnableConfig): Configuration parameters for the LangChain execution.
+        state: The global AgentState containing the full message history.
+        config: LangChain execution configuration.
 
     Returns:
-        dict: A dictionary containing the newly synthesized `messages` to append to the state,
-              or an empty dictionary if synthesis is skipped.
+        A partial state dict with the synthesized `messages` list,
+        or an empty dict if synthesis was skipped or failed.
     """
     messages = state.get("messages", [])
 
-    # Find the last human message
+    # ── 1. Find the boundary of the current conversation turn ────────────────
+    # We only want to synthesize messages that were generated THIS turn, not
+    # messages from previous turns which are already user-visible history.
     last_human_idx = -1
     for i in range(len(messages) - 1, -1, -1):
         if hasattr(messages[i], "type") and messages[i].type == "human":
@@ -68,33 +58,27 @@ async def synthesizer_node(state: AgentState, config: RunnableConfig) -> dict:
             break
 
     if last_human_idx == -1:
+        # No human message found — nothing to synthesize
         return {}
 
+    # ── 2. Collect all AI messages generated in the current turn ──────────────
     current_turn_messages = messages[last_human_idx + 1 :]
     filtered_turn_messages = filter_tool_messages(current_turn_messages)
 
-    # Get all AI messages generated AFTER the last human message
-    new_ai_messages = [
-        m for m in filtered_turn_messages if hasattr(m, "type") and m.type == "ai"
-    ]
+    new_ai_messages = filter_ai_messages(filtered_turn_messages)
 
-    # Exclude supervisor messages from the count so that 1 agent + 1 supervisor = 1 agent response
-    agent_responses = [
-        m for m in new_ai_messages if getattr(m, "name", "") != "supervisor"
-    ]
-
-    # Only synthesize if there are multiple agent responses
-    if len(agent_responses) <= 1:
-        return {}
-
+    # ── 3. Build synthesis prompt and call the LLM ────────────────────────────
     has_image_context = (
         bool(state.get("image_base64")) or state.get("image_is_safe") is False
     )
 
     try:
-        llm = get_llm(temperature=0.3, cache=False if has_image_context else None)
+        llm = get_llm(
+            temperature=SYNTHESIZER_LLM_CONFIG.temperature,
+            cache=False if has_image_context else SYNTHESIZER_LLM_CONFIG.default_cache,
+        )
 
-        # Format the agent responses for the LLM
+        # Format all agent responses into a single block for the LLM
         agent_responses_text = "Raw Agent Responses to combine:\n"
         for i, msg in enumerate(new_ai_messages):
             source = getattr(msg, "name", f"Agent_{i + 1}")
@@ -107,9 +91,11 @@ async def synthesizer_node(state: AgentState, config: RunnableConfig) -> dict:
 
         response = await llm.ainvoke(prompt_messages, config=config)
 
-        # Append the final synthesized message.
-        # The UI will pick this up as the LAST AI message!
+        # ── 6. Return the merged response as the final visible AI message ─────
+        # The UI picks up the LAST AI message, so this becomes what the user sees.
         return {"messages": [AIMessage(content=response.content)]}
+
     except Exception as e:
         logger.exception("Synthesizer failed: %s", e)
+        # Return {} — the individual agent responses will be shown instead
         return {}

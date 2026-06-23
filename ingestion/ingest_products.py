@@ -22,26 +22,50 @@ SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 
-def load_products():
-    """Loads product records from data/products.json."""
+# ── Private helpers ───────────────────────────────────────────────────────────
+
+
+def _load_products_json() -> list[dict]:
+    """
+    Loads product records from the data/products.json file.
+
+    Returns:
+        A list of dictionaries representing products.
+    """
     file_path = Path(__file__).parent.parent / "data" / "products.json"
     with open(file_path, "r", encoding="utf-8") as f:
         return json.load(f)
 
 
-def ingest_products():
+def _upsert_products_in_batches(products: list[dict], batch_size: int = 100) -> None:
     """
-    Reads the products JSON file and upserts them in batches into the Supabase database.
-    """
-    setup_database_schema()
-    products = load_products()
+    Upsert product records in batches into the Supabase database.
 
-    batch_size = 100
+    Args:
+        products: A list of product dicts to insert or update.
+        batch_size: Number of records to process per batch.
+    """
     for i in range(0, len(products), batch_size):
         batch = products[i : i + batch_size]
         response = supabase.table("products").upsert(batch).execute()
         print(f"Inserted/Updated {len(response.data)} products")
 
+
+# ── Public entrypoint ─────────────────────────────────────────────────────────
+
+
+def ingest_products() -> None:
+    """
+    Reads the products JSON file and upserts them in batches into the Supabase database.
+    """
+    # ── 1. Initialize database tables ─────────────────────────────────────────
+    setup_database_schema()
+
+    # ── 2. Read products from local JSON ──────────────────────────────────────
+    products = _load_products_json()
+
+    # ── 3. Upsert products in batches ─────────────────────────────────────────
+    _upsert_products_in_batches(products, batch_size=100)
     print(f"Finished seeding {len(products)} products.")
 
 

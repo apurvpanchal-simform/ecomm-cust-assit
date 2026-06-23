@@ -34,7 +34,7 @@ def test_chat_flows(data):
         _turns = []
         for i, user_input in enumerate(data["turns"]):
             _turns.append({"role": "user", "content": user_input})
-            
+
             result = await graph.ainvoke(
                 {
                     "messages": [HumanMessage(content=user_input)],
@@ -42,7 +42,7 @@ def test_chat_flows(data):
                 },
                 config=config,
             )
-            
+
             ai_output = result["messages"][-1].content
             _turns.append({"role": "assistant", "content": ai_output})
         return _turns
@@ -60,7 +60,9 @@ def test_chat_flows(data):
 
     # Define conversational metrics with ideal production thresholds
     role_metric = RoleAdherenceMetric(threshold=0.8, model=evaluator_model)
-    completeness_metric = ConversationCompletenessMetric(threshold=0.8, model=evaluator_model)
+    completeness_metric = ConversationCompletenessMetric(
+        threshold=0.8, model=evaluator_model
+    )
 
     # Assert sequentially to respect rate limits
     errors = []

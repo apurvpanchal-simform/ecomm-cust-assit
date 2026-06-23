@@ -671,6 +671,7 @@ const API_BASE = window.location.origin;
 let activeConversationId = null;
 let conversations = [];
 let eventSource = null;
+let activeWS = null;
 
 // ── Fetch Escalated Conversations ──────────────────────────────────────
 async function fetchConversations() {
@@ -774,6 +775,9 @@ async function selectConversation(convId) {
                 <p>No AI summary available</p>
             </div>`;
     }
+
+    // Setup WebSocket connection for this conversation
+    setupConversationWS(convId);
 }
 
 // ── Load Chat History ──────────────────────────────────────────────────
@@ -806,7 +810,7 @@ function renderMessages(messages) {
         return;
     }
 
-    container.innerHTML = messages.map(msg => {
+    const newHTML = messages.map(msg => {
         const isUser = msg.role === "user";
         const isAgent = msg.name === "support_agent";
         const roleClass = isUser ? "user" : "assistant";
@@ -831,6 +835,119 @@ function renderMessages(messages) {
     }
 }
 
+function appendMessage(label, content, roleClass, avoidDuplicate = false) {
+    const container = document.getElementById("messagesContainer");
+    
+    // Clear empty state if any
+    const emptyState = container.querySelector(".empty-state");
+    if (emptyState) {
+        container.innerHTML = "";
+    }
+
+    // Check for duplicate message content if requested (e.g. to prevent agent reply double rendering)
+    if (avoidDuplicate) {
+        const bubbles = container.querySelectorAll(".msg-bubble");
+        for (let b of bubbles) {
+            if (b.textContent.trim() === content.trim()) {
+                return;
+            }
+        }
+    }
+
+    const msgHtml = `
+        <div class="message ${roleClass}">
+            <span class="msg-label">${label}</span>
+            <div class="msg-bubble markdown-content">${renderMarkdown(content)}</div>
+        </div>`;
+    
+    container.insertAdjacentHTML("beforeend", msgHtml);
+    container.scrollTop = container.scrollHeight;
+}
+
+function appendSystemMessage(content) {
+    const container = document.getElementById("messagesContainer");
+    
+    // Clear empty state if any
+    const emptyState = container.querySelector(".empty-state");
+    if (emptyState) {
+        container.innerHTML = "";
+    }
+
+    const msgHtml = `<div class="system-message" style="text-align:center;color:var(--text-muted);font-size:0.85rem;margin:10px;font-style:italic;padding:6px 0;border-top:1px solid var(--border-glass);">${content}</div>`;
+    
+    container.insertAdjacentHTML("beforeend", msgHtml);
+    container.scrollTop = container.scrollHeight;
+}
+
+function setupConversationWS(convId) {
+    if (activeWS) {
+        activeWS.close();
+        activeWS = null;
+    }
+
+    const agentName = document.getElementById("agentNameInput").value.trim() || "Support Agent";
+    const WS_BASE = API_BASE.replace(/^http/, "ws");
+    const wsUrl = `${WS_BASE}/chat/ws?role=support&conversation_id=${convId}&agent_name=${encodeURIComponent(agentName)}`;
+
+    console.log("Connecting WS to URL:", wsUrl);
+    activeWS = new WebSocket(wsUrl);
+
+    activeWS.onopen = () => {
+        console.log(`WebSocket connected to conversation ${convId}`);
+    };
+
+    activeWS.onmessage = (event) => {
+        try {
+            const data = JSON.parse(event.data);
+            console.log("WebSocket event received:", data);
+
+            // If the message isn't for the current conversation, ignore it
+            if (data.conversation_id && data.conversation_id !== activeConversationId) {
+                return;
+            }
+
+            if (data.event === "customer_message") {
+                appendMessage("Customer", data.content, "user", false);
+                const ind = document.getElementById("customerTypingIndicator");
+                if (ind) ind.style.display = "none";
+            } else if (data.event === "agent_reply") {
+                appendMessage(`🛡️ ${data.agent_name || "Support Agent"}`, data.content, "assistant agent", true);
+            } else if (data.event === "agent_joined") {
+                appendSystemMessage(data.content || `🟢 ${data.agent_name || "Support Agent"} has joined the chat.`);
+            } else if (data.event === "customer_typing") {
+                const ind = document.getElementById("customerTypingIndicator");
+                if (ind) {
+                    ind.style.display = "flex";
+                    if (window.customerTypingTimeout) clearTimeout(window.customerTypingTimeout);
+                    window.customerTypingTimeout = setTimeout(() => {
+                        ind.style.display = "none";
+                    }, 3000);
+                }
+            } else if (data.event === "resolved") {
+                appendSystemMessage(data.content || "✅ The conversation has been resolved.");
+                document.getElementById("btnJoin").disabled = true;
+                document.getElementById("btnResolve").disabled = true;
+                document.getElementById("replyBar").style.display = "none";
+            } else if (data.event === "customer_online") {
+                setCustomerPresence(true);
+            } else if (data.event === "customer_offline" || data.event === "customer_disconnected") {
+                setCustomerPresence(false);
+                appendSystemMessage("🔴 Customer has disconnected");
+            }
+        } catch (err) {
+            console.error("Error parsing WS message:", err);
+        }
+    };
+
+    activeWS.onclose = () => {
+        console.log(`WebSocket closed for conversation ${convId}`);
+    };
+
+    activeWS.onerror = (err) => {
+        console.error("WebSocket error:", err);
+    };
+}
+
 // ── Agent Actions ──────────────────────────────────────────────────────
 async function joinConversation() {
     const agentName = document.getElementById("agentNameInput").value.trim();
@@ -839,23 +956,30 @@ async function joinConversation() {
 
     localStorage.setItem("agentName", agentName);
 
-    try {
-        const res = await fetch(
-            `${API_BASE}/support/conversations/${activeConversationId}/join?agent_name=${encodeURIComponent(agentName)}`,
-            { method: "POST" }
-        );
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-
+    if (activeWS && activeWS.readyState === WebSocket.OPEN) {
+        activeWS.send(JSON.stringify({ type: "join" }));
         document.getElementById("btnJoin").disabled = true;
         document.getElementById("btnResolve").disabled = false;
         document.getElementById("replyBar").style.display = "flex";
+    } else {
+        try {
+            const res = await fetch(
+                `${API_BASE}/support/conversations/${activeConversationId}/join?agent_name=${encodeURIComponent(agentName)}`,
+                { method: "POST" }
+            );
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
-        // Refresh data
-        await fetchConversations();
-        await loadChatHistory(activeConversationId);
-    } catch (err) {
-        console.error("Failed to join:", err);
-        alert("Failed to join conversation. See console.");
+            document.getElementById("btnJoin").disabled = true;
+            document.getElementById("btnResolve").disabled = false;
+            document.getElementById("replyBar").style.display = "flex";
+
+            // Refresh data
+            await fetchConversations();
+            await loadChatHistory(activeConversationId);
+        } catch (err) {
+            console.error("Failed to join:", err);
+            alert("Failed to join conversation. See console.");
+        }
     }
 }
 
@@ -867,12 +991,17 @@ async function notifyTyping() {
     if (now - lastTypingTime < 2000) return; // Throttle to every 2 seconds
     lastTypingTime = now;
 
-    const agentName = document.getElementById("agentNameInput").value.trim() || "Support Agent";
-    fetch(`${API_BASE}/support/conversations/${activeConversationId}/typing`, { 
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ agent_name: agentName })
-    }).catch(console.error);
+    if (activeWS && activeWS.readyState === WebSocket.OPEN) {
+        activeWS.send(JSON.stringify({ type: "agent_typing" }));
+    } else {
+        // Fallback to HTTP POST
+        const agentName = document.getElementById("agentNameInput").value.trim() || "Support Agent";
+        fetch(`${API_BASE}/support/conversations/${activeConversationId}/typing`, { 
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ agent_name: agentName })
+        }).catch(console.error);
+    }
 }
 
 async function sendReply() {
@@ -884,28 +1013,29 @@ async function sendReply() {
 
     const agentName = document.getElementById("agentNameInput").value.trim() || "Support Agent";
 
-    try {
-        const res = await fetch(
-            `${API_BASE}/support/conversations/${activeConversationId}/reply`,
-            {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ message, agent_name: agentName }),
-            }
-        );
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    // Immediately add the message to the UI for instant responsive feedback
+    appendMessage(`🛡️ Support Agent`, message, "assistant agent", true);
 
-        // Immediately add the message to the UI for instant feedback
-        const container = document.getElementById("messagesContainer");
-        container.innerHTML += `
-            <div class="message assistant agent">
-                <span class="msg-label">🛡️ Support Agent</span>
-                <div class="msg-bubble markdown-content">${renderMarkdown(message)}</div>
-            </div>`;
-        container.scrollTop = container.scrollHeight;
-    } catch (err) {
-        console.error("Failed to send reply:", err);
-        alert("Failed to send reply. See console.");
+    if (activeWS && activeWS.readyState === WebSocket.OPEN) {
+        activeWS.send(JSON.stringify({
+            type: "agent_reply",
+            content: message
+        }));
+    } else {
+        try {
+            const res = await fetch(
+                `${API_BASE}/support/conversations/${activeConversationId}/reply`,
+                {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ message, agent_name: agentName }),
+                }
+            );
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        } catch (err) {
+            console.error("Failed to send reply:", err);
+            alert("Failed to send reply. See console.");
+        }
     }
 }
 
@@ -913,13 +1043,9 @@ async function resolveConversation() {
     if (!activeConversationId) return;
     if (!confirm("Resolve this conversation? The AI assistant will be re-enabled for the customer.")) return;
 
-    try {
-        const res = await fetch(
-            `${API_BASE}/support/conversations/${activeConversationId}/resolve`,
-            { method: "POST" }
-        );
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-
+    if (activeWS && activeWS.readyState === WebSocket.OPEN) {
+        activeWS.send(JSON.stringify({ type: "resolve" }));
+        
         // Reset UI
         activeConversationId = null;
         localStorage.removeItem("activeConversationId");
@@ -937,9 +1063,35 @@ async function resolveConversation() {
             </div>`;
 
         await fetchConversations();
-    } catch (err) {
-        console.error("Failed to resolve:", err);
-        alert("Failed to resolve conversation. See console.");
+    } else {
+        try {
+            const res = await fetch(
+                `${API_BASE}/support/conversations/${activeConversationId}/resolve`,
+                { method: "POST" }
+            );
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+            // Reset UI
+            activeConversationId = null;
+            localStorage.removeItem("activeConversationId");
+            document.getElementById("chatHeader").style.display = "none";
+            document.getElementById("replyBar").style.display = "none";
+            document.getElementById("messagesContainer").innerHTML = `
+                <div class="empty-state">
+                    <div class="empty-icon">✅</div>
+                    <p>Conversation resolved! Select another from the sidebar.</p>
+                </div>`;
+            document.getElementById("contextBody").innerHTML = `
+                <div class="empty-state">
+                    <div class="empty-icon">🧠</div>
+                    <p>Select a conversation to view AI summary</p>
+                </div>`;
+
+            await fetchConversations();
+        } catch (err) {
+            console.error("Failed to resolve:", err);
+            alert("Failed to resolve conversation. See console.");
+        }
     }
 }
 
@@ -1022,9 +1174,11 @@ document.addEventListener("DOMContentLoaded", () => {
                 // ── Conversation list refresh ───────────────────────────────
                 if (["new_escalation", "resolved", "agent_joined", "agent_reply", "customer_message", "agent_unassigned"].includes(data.event)) {
                     fetchConversations();
-                    // If the active conversation received a new message, refresh chat history
+                    // If the active conversation received a new message, refresh chat history only if WS is not open
                     if (activeConversationId === data.conversation_id) {
-                        loadChatHistory(activeConversationId);
+                        if (!activeWS || activeWS.readyState !== WebSocket.OPEN) {
+                            loadChatHistory(activeConversationId);
+                        }
                     }
                 }
 

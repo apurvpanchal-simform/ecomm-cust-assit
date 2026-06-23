@@ -1,10 +1,20 @@
 """
-Custom LangGraph Checkpointer that implements a Dual-Write strategy.
+Custom LangGraph Checkpointer implementing a Dual-Write strategy.
 
-Writes to both an ephemeral Redis cache for fast hot-path retrieval,
-and a durable Postgres (Supabase) database for long-term persistence and auditing.
+Read path:   Redis first (fast) → Postgres fallback (durable)
+Write path:  Postgres (durable) + Redis (hot cache) simultaneously
+
+Why dual-write?
+---------------
+- Redis provides sub-millisecond reads for active conversations.
+- Postgres (Supabase) provides durability so conversations survive Redis restarts.
+- Redis keys are given a 1-hour TTL to bound memory usage.
+
+Additionally, every `aput()` writes a human-readable JSON row to the
+`checkpoint_state_logs` table in Postgres for debugging and auditing.
 """
 
+import json
 import logging
 from typing import Any, AsyncIterator, Dict, Optional, Sequence, Tuple
 
@@ -22,8 +32,16 @@ logger = logging.getLogger(__name__)
 
 class AsyncDualCheckpointer(BaseCheckpointSaver):
     """
-    An async LangGraph checkpointer that writes to both Redis and Postgres (Supabase).
-    Reads prioritize Redis for speed, falling back to Postgres if a cache miss occurs.
+    Async LangGraph checkpointer that writes to both Redis and Postgres.
+
+    Reads prioritise Redis for speed; on a cache miss the checkpointer falls
+    back to Postgres and re-warms the Redis cache so the next read is fast.
+
+    Attributes:
+        redis_saver:    The AsyncRedisSaver for hot-path reads/writes.
+        postgres_saver: The AsyncPostgresSaver for durable storage.
+        pool:           Optional psycopg connection pool used to write the
+                        human-readable JSON audit log.
     """
 
     def __init__(
@@ -37,8 +55,19 @@ class AsyncDualCheckpointer(BaseCheckpointSaver):
         self.postgres_saver = postgres_saver
         self.pool = pool
 
-    async def _expire_thread_keys(self, thread_id: str, ttl: int = 3600):
-        """Scans and expires all LangGraph checkpoint keys associated with a thread."""
+    # ── Private helpers ───────────────────────────────────────────────────────
+
+    async def _expire_thread_keys(self, thread_id: str, ttl: int = 3600) -> None:
+        """
+        Set a TTL on all LangGraph checkpoint keys associated with a thread.
+
+        Scans for keys matching `checkpoint*<thread_id>*` and calls EXPIRE on
+        each one so old checkpoints are automatically evicted from Redis.
+
+        Args:
+            thread_id: The conversation thread ID.
+            ttl: Expiry in seconds (default 1 hour).
+        """
         if not thread_id or not hasattr(self.redis_saver, "_redis"):
             return
 
@@ -50,62 +79,253 @@ class AsyncDualCheckpointer(BaseCheckpointSaver):
                     cursor=cursor, match=f"checkpoint*{thread_id}*", count=100
                 )
                 if keys:
+                    # Set TTL for all matched keys in a single pipeline call
                     async with redis_client.pipeline(transaction=False) as pipe:
                         for key in keys:
                             pipe.expire(key, ttl)
                         await pipe.execute()
                 if cursor == 0:
-                    break
+                    break  # Full scan complete
         except Exception as e:
             logger.error("Failed to set Redis TTL for thread %s: %s", thread_id, e)
+
+    def _serialize_message(self, msg: Any) -> Any:
+        """
+        Recursively convert a LangChain message (or nested structure) to a
+        JSON-serialisable dict.
+
+        Used when writing the human-readable audit log to Postgres so that
+        message objects are stored as plain dicts rather than pickled bytes.
+
+        Args:
+            msg: A LangChain message object, dict, list, or primitive value.
+
+        Returns:
+            A JSON-serialisable representation of the input.
+        """
+        if not msg:
+            return msg
+
+        # LangChain message objects expose a `.type` attribute
+        if hasattr(msg, "type"):
+            try:
+                return {
+                    "type": msg.type,
+                    "content": getattr(msg, "content", ""),
+                    "name": getattr(msg, "name", None),
+                    "tool_calls": getattr(msg, "tool_calls", None),
+                    "id": getattr(msg, "id", None),
+                }
+            except Exception:
+                pass
+
+        # Recursively handle nested dicts and lists
+        if isinstance(msg, dict):
+            return {k: self._serialize_message(v) for k, v in msg.items()}
+        if isinstance(msg, (list, tuple)):
+            return [self._serialize_message(x) for x in msg]
+
+        return msg
+
+    def _serialize_state_values(self, values: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Serialise the full channel values dict for the JSON audit log.
+
+        Large binary fields (`image_base64`, `image_embedding`) are replaced
+        with a placeholder string to avoid bloating the Postgres audit table.
+
+        Args:
+            values: The raw `channel_values` dict from a Checkpoint object.
+
+        Returns:
+            A JSON-serialisable dict with binary fields excluded.
+        """
+        if not values:
+            return {}
+
+        serialized = {}
+        for k, v in values.items():
+            if k in ("image_base64", "image_embedding"):
+                # These can be megabytes — exclude from the readable log
+                serialized[k] = "[EXCLUDED_FOR_SIZE]"
+                continue
+            serialized[k] = self._serialize_message(v)
+        return serialized
+
+    def _serialize_metadata(self, metadata: Any) -> Dict[str, Any]:
+        """
+        Normalise checkpoint metadata into a plain dict for JSON serialisation.
+
+        Handles Pydantic models (`.dict()`), raw dicts, and anything that is
+        already JSON-serialisable.  Falls back to `{"raw": str(metadata)}` if
+        the object cannot be converted.
+
+        Args:
+            metadata: A CheckpointMetadata object or compatible type.
+
+        Returns:
+            A plain dict representation.
+        """
+        if not metadata:
+            return {}
+        if hasattr(metadata, "dict") and callable(metadata.dict):
+            try:
+                return metadata.dict()
+            except Exception:
+                pass
+        if isinstance(metadata, dict):
+            return metadata
+        try:
+            json.dumps(metadata)  # test if already serialisable
+            return metadata
+        except TypeError:
+            return {"raw": str(metadata)}
+
+    def _extract_checkpoint_fields(
+        self, checkpoint: Checkpoint | None, metadata: CheckpointMetadata | None
+    ) -> tuple[str, str | None, dict, str | None]:
+        """
+        Extract the key fields needed for the JSON audit log from raw checkpoint objects.
+
+        Handles both Pydantic-style objects (attribute access) and plain dicts.
+
+        Args:
+            checkpoint: The LangGraph Checkpoint object.
+            metadata:   The associated CheckpointMetadata object.
+
+        Returns:
+            A tuple of:
+                checkpoint_id        (str)       — unique checkpoint UUID
+                parent_checkpoint_id (str|None)  — parent checkpoint UUID
+                channel_values       (dict)       — full state at this checkpoint
+                step_node            (str|None)   — graph node name for this step
+        """
+        checkpoint_id = ""
+        parent_checkpoint_id = None
+        channel_values: dict = {}
+        step_node = None
+
+        # ── Extract from checkpoint ───────────────────────────────────────────
+        if checkpoint:
+            if isinstance(checkpoint, dict):
+                channel_values = checkpoint.get("channel_values", {})
+                checkpoint_id = checkpoint.get("id", "")
+                parent_checkpoint_id = checkpoint.get("parent_checkpoint_id")
+            else:
+                channel_values = getattr(checkpoint, "channel_values", {})
+                checkpoint_id = getattr(checkpoint, "id", "")
+                parent_checkpoint_id = getattr(checkpoint, "parent_checkpoint_id", None)
+
+        # ── Extract from metadata ─────────────────────────────────────────────
+        if metadata:
+            if isinstance(metadata, dict):
+                step_node = metadata.get("node")
+                parents = metadata.get("parents")
+            else:
+                step_node = getattr(metadata, "node", None)
+                parents = getattr(metadata, "parents", None)
+
+            # Use parents dict/list as a fallback for parent_checkpoint_id
+            if parents and not parent_checkpoint_id:
+                if isinstance(parents, dict):
+                    parent_checkpoint_id = (
+                        next(iter(parents.values())) if parents else None
+                    )
+                elif isinstance(parents, (list, tuple)):
+                    parent_checkpoint_id = parents[0] if parents else None
+                else:
+                    parent_checkpoint_id = str(parents)
+
+        return checkpoint_id, parent_checkpoint_id, channel_values, step_node
+
+    async def _write_json_log(
+        self,
+        thread_id: str,
+        checkpoint_id: str,
+        parent_checkpoint_id: str | None,
+        step_node: str | None,
+        channel_values: dict,
+        metadata: CheckpointMetadata | None,
+    ) -> None:
+        """
+        Write a human-readable JSON row to the `checkpoint_state_logs` audit table.
+
+        This is best-effort — any failure is logged as a warning but does not
+        raise an exception (the checkpoint write itself has already succeeded).
+
+        Args:
+            thread_id:            The conversation thread ID.
+            checkpoint_id:        Unique ID for this checkpoint.
+            parent_checkpoint_id: ID of the preceding checkpoint (may be None).
+            step_node:            Name of the graph node that triggered this write.
+            channel_values:       Full state values at this checkpoint.
+            metadata:             Raw CheckpointMetadata object.
+        """
+        try:
+            serialized_values = self._serialize_state_values(channel_values)
+            serialized_metadata = self._serialize_metadata(metadata)
+
+            async with self.pool.connection() as conn:
+                await conn.execute(
+                    """
+                    INSERT INTO checkpoint_state_logs (
+                        conversation_id,
+                        checkpoint_id,
+                        parent_checkpoint_id,
+                        step_node,
+                        state_values,
+                        metadata
+                    ) VALUES (%s, %s, %s, %s, %s, %s)
+                    """,
+                    (
+                        thread_id,
+                        checkpoint_id,
+                        parent_checkpoint_id,
+                        step_node,
+                        json.dumps(serialized_values, default=str),
+                        json.dumps(serialized_metadata, default=str),
+                    ),
+                )
+        except Exception as e:
+            logger.warning(
+                "⚠️ Failed to write JSON checkpoint log: %s", e, exc_info=True
+            )
+
+    # ── LangGraph BaseCheckpointSaver interface ───────────────────────────────
 
     async def aget_tuple(
         self,
         config: RunnableConfig,
     ) -> Optional[CheckpointTuple]:
         """
-        Fetch the checkpoint tuple for a given configuration.
+        Fetch the latest checkpoint tuple for a given thread configuration.
 
-        Attempts to read from Redis first. On cache miss, falls back to Postgres,
-        and if found, re-warms the Redis cache.
+        Read order: Redis (fast) → Postgres (durable fallback).
+        On a Postgres hit, the result is written back to Redis to warm the cache.
 
         Args:
-            config: The thread configuration containing thread_id.
+            config: LangGraph runnable config containing `configurable.thread_id`.
 
         Returns:
             The CheckpointTuple if found, else None.
         """
-
-        thread_id = config.get("configurable", {}).get("thread_id")
-
-        logger.info("THREAD_ID=%s", thread_id)
-
+        # ── 1. Try Redis first ────────────────────────────────────────────────
         tuple_ = await self.redis_saver.aget_tuple(config)
-
         if tuple_ is not None:
-            logger.info("⚡ REDIS READ HIT (aget_tuple)")
             return tuple_
 
-        logger.info("❌ REDIS READ MISS (aget_tuple)")
-
+        # ── 2. Fall back to Postgres ──────────────────────────────────────────
         tuple_ = await self.postgres_saver.aget_tuple(config)
-
         if tuple_ is not None:
-            logger.info("🐘 SUPABASE READ HIT (aget_tuple)")
             try:
-                # WARM REDIS CACHE: Write the tuple back to Redis so subsequent reads hit the cache
-                logger.info("⚡ REDIS WRITE (Warm Cache)")
+                # Warm the Redis cache so the next read is fast
                 await self.redis_saver.aput(
                     tuple_.config, tuple_.checkpoint, tuple_.metadata, {}
                 )
-
-                # Set TTL on all restored keys
                 thread_id = tuple_.config.get("configurable", {}).get("thread_id")
                 await self._expire_thread_keys(thread_id)
             except Exception as e:
                 logger.error("Failed to warm Redis cache: %s", e)
-        else:
-            logger.info("❌ SUPABASE READ MISS (aget_tuple)")
 
         return tuple_
 
@@ -118,76 +338,24 @@ class AsyncDualCheckpointer(BaseCheckpointSaver):
         limit: Optional[int] = None,
     ) -> AsyncIterator[CheckpointTuple]:
         """
-        List checkpoints for a given thread configuration.
+        List checkpoints for a thread, reading from Postgres (durable storage).
 
-        Reads from Postgres as it serves as the long-term durable storage layer.
+        Redis is not used for listing — Postgres is the source of truth for
+        historical checkpoint enumeration.
 
         Args:
-            config: The thread configuration.
-            filter: Optional filters.
-            before: Limit to checkpoints before this one.
-            limit: Maximum number of checkpoints to return.
+            config: Thread configuration.
+            filter: Optional metadata filters.
+            before: Limit results to checkpoints before this config.
+            limit: Maximum number of results.
 
         Yields:
-            Matching CheckpointTuples.
+            Matching CheckpointTuples in reverse chronological order.
         """
-        # Read history from Postgres since it's our durable long-term storage
-        logger.info("🐘 SUPABASE READ (alist)")
         async for item in self.postgres_saver.alist(
             config, filter=filter, before=before, limit=limit
         ):
             yield item
-
-    def _serialize_message(self, msg: Any) -> Any:
-        if not msg:
-            return msg
-        if hasattr(msg, "type"):
-            try:
-                return {
-                    "type": msg.type,
-                    "content": getattr(msg, "content", ""),
-                    "name": getattr(msg, "name", None),
-                    "tool_calls": getattr(msg, "tool_calls", None),
-                    "id": getattr(msg, "id", None),
-                }
-            except Exception:
-                pass
-        if isinstance(msg, dict):
-            return {k: self._serialize_message(v) for k, v in msg.items()}
-        if isinstance(msg, (list, tuple)):
-            return [self._serialize_message(x) for x in msg]
-        return msg
-
-    def _serialize_state_values(self, values: Dict[str, Any]) -> Dict[str, Any]:
-        if not values:
-            return {}
-        serialized = {}
-        for k, v in values.items():
-            if k in ("image_base64", "image_embedding"):
-                serialized[k] = "[EXCLUDED_FOR_SIZE]"
-                continue
-
-            # Use deep serialization for everything
-            serialized[k] = self._serialize_message(v)
-        return serialized
-
-    def _serialize_metadata(self, metadata: Any) -> Dict[str, Any]:
-        if not metadata:
-            return {}
-        if hasattr(metadata, "dict") and callable(metadata.dict):
-            try:
-                return metadata.dict()
-            except Exception:
-                pass
-        if isinstance(metadata, dict):
-            return metadata
-        try:
-            import json
-
-            json.dumps(metadata)
-            return metadata
-        except TypeError:
-            return {"raw": str(metadata)}
 
     async def aput(
         self,
@@ -197,115 +365,45 @@ class AsyncDualCheckpointer(BaseCheckpointSaver):
         new_versions: ChannelVersions,
     ) -> RunnableConfig:
         """
-        Save a checkpoint to both underlying storage systems.
+        Save a checkpoint to both Postgres and Redis simultaneously.
 
-        Writes simultaneously to Postgres and Redis. Also writes a human-readable
-        JSON log to a custom `checkpoint_state_logs` table for debugging purposes.
-        Expires old Redis checkpoints to save memory.
+        Write order: Postgres first (durability), then Redis (speed).
+        Also writes a human-readable JSON row to `checkpoint_state_logs` if
+        a connection pool is available.  Finally, sets a 1-hour TTL on all
+        Redis keys for this thread to prevent unbounded memory growth.
 
         Args:
-            config: The thread configuration.
-            checkpoint: The checkpoint data.
-            metadata: Associated metadata.
-            new_versions: Channel versions.
+            config: Thread configuration.
+            checkpoint: The checkpoint data to save.
+            metadata: Associated checkpoint metadata.
+            new_versions: Updated channel versions.
 
         Returns:
-            The updated RunnableConfig.
+            The updated RunnableConfig (from the Redis saver).
         """
-        # Write the checkpoint to Supabase for long-term persistence.
-        logger.info("🐘 SUPABASE WRITE (aput)")
+        # ── 1. Write to Postgres for durable persistence ──────────────────────
         await self.postgres_saver.aput(config, checkpoint, metadata, new_versions)
-        # Write the latest checkpoint to Redis (hot cache).
-        logger.info("⚡ REDIS WRITE (aput)")
+
+        # ── 2. Write to Redis for fast subsequent reads ───────────────────────
         res = await self.redis_saver.aput(config, checkpoint, metadata, new_versions)
 
-        # Write readable JSON log entry if connection pool is available
+        # ── 3. Write human-readable JSON audit log (best-effort) ──────────────
         if self.pool:
-            try:
-                thread_id = config.get("configurable", {}).get("thread_id")
-                if thread_id:
-                    # Extract checkpoint details
-                    checkpoint_id = ""
-                    parent_checkpoint_id = None
-                    channel_values = {}
-
-                    if checkpoint:
-                        if isinstance(checkpoint, dict):
-                            channel_values = checkpoint.get("channel_values", {})
-                            checkpoint_id = checkpoint.get("id", "")
-                            parent_checkpoint_id = checkpoint.get(
-                                "parent_checkpoint_id"
-                            )
-                        else:
-                            channel_values = getattr(checkpoint, "channel_values", {})
-                            checkpoint_id = getattr(checkpoint, "id", "")
-                            parent_checkpoint_id = getattr(
-                                checkpoint, "parent_checkpoint_id", None
-                            )
-
-                    step_node = None
-                    if metadata:
-                        if isinstance(metadata, dict):
-                            step_node = metadata.get("node")
-                            parents = metadata.get("parents")
-                        else:
-                            step_node = getattr(metadata, "node", None)
-                            parents = getattr(metadata, "parents", None)
-
-                        if parents and not parent_checkpoint_id:
-                            if isinstance(parents, dict):
-                                parent_checkpoint_id = (
-                                    next(iter(parents.values())) if parents else None
-                                )
-                            elif isinstance(parents, (list, tuple)):
-                                parent_checkpoint_id = parents[0] if parents else None
-                            else:
-                                parent_checkpoint_id = str(parents)
-
-                    # Serialize values
-                    serialized_values = self._serialize_state_values(channel_values)
-                    serialized_metadata = self._serialize_metadata(metadata)
-
-                    import json
-
-                    logger.info(
-                        logger.info(
-                            "💾 Writing human-readable JSON state log for thread_id=%s, node=%s",
-                            thread_id,
-                            step_node,
-                        )
-                    )
-
-                    async with self.pool.connection() as conn:
-                        await conn.execute(
-                            """
-                            INSERT INTO checkpoint_state_logs (
-                                conversation_id, 
-                                checkpoint_id, 
-                                parent_checkpoint_id, 
-                                step_node, 
-                                state_values, 
-                                metadata
-                            ) VALUES (%s, %s, %s, %s, %s, %s)
-                            """,
-                            (
-                                thread_id,
-                                checkpoint_id,
-                                parent_checkpoint_id,
-                                step_node,
-                                json.dumps(serialized_values, default=str),
-                                json.dumps(serialized_metadata, default=str),
-                            ),
-                        )
-            except Exception as e:
-                logger.warning(
-                    logger.error(
-                        "⚠️ Failed to write JSON checkpoint log: %s", e, exc_info=True
-                    )
+            thread_id = config.get("configurable", {}).get("thread_id")
+            if thread_id:
+                checkpoint_id, parent_checkpoint_id, channel_values, step_node = (
+                    self._extract_checkpoint_fields(checkpoint, metadata)
+                )
+                await self._write_json_log(
+                    thread_id=thread_id,
+                    checkpoint_id=checkpoint_id,
+                    parent_checkpoint_id=parent_checkpoint_id,
+                    step_node=step_node,
+                    channel_values=channel_values,
+                    metadata=metadata,
                 )
 
-        # Prune old checkpoints from Redis — keep only the latest one.
-        # We apply a 1-hour TTL to ALL LangGraph keys associated with this thread.
+        # ── 4. Set TTL on all Redis keys for this thread ──────────────────────
         thread_id = config.get("configurable", {}).get("thread_id")
         await self._expire_thread_keys(thread_id)
 
@@ -317,19 +415,31 @@ class AsyncDualCheckpointer(BaseCheckpointSaver):
         writes: Sequence[Tuple[str, Any]],
         task_id: str,
     ) -> None:
-        """Asynchronously writes data according to the given RunnableConfig.
+        """
+        Persist intermediate write-ahead entries for a task.
+
+        Only written to Postgres — these are intermediate entries that don't
+        need to be cached in Redis since the final `aput()` will follow.
 
         Args:
-            config: Configuration for the runnable operation.
-
-        Returns:
-            None. The operation completes when all writes are finished.
+            config: Thread configuration.
+            writes: Sequence of (channel_name, value) pairs to persist.
+            task_id: The LangGraph task ID for this write batch.
         """
-        # Only write intermediate states to Postgres.
-        logger.info("🐘 SUPABASE WRITE (aput_writes)")
         await self.postgres_saver.aput_writes(config, writes, task_id)
 
     def get_next_version(self, current: Optional[str], channel: Any) -> str:
-        """Return the next version string derived from the current version and channel. If current is None, compute the initial version for the channel."""
-        # Delegate version generation to one of the underlying savers
+        """
+        Compute the next version string for a channel.
+
+        Delegates to Postgres saver — version generation strategy is tied to
+        the durable storage layer.
+
+        Args:
+            current: The current version string, or None for the initial version.
+            channel: The channel descriptor.
+
+        Returns:
+            The next version string.
+        """
         return self.postgres_saver.get_next_version(current, channel)

@@ -53,16 +53,10 @@ The application uses a decoupled frontend-backend architecture:
 - **AI Bypass**: The FastAPI backend transitions the conversation state to `escalated`, routing all subsequent user messages directly to a **Human Support Dashboard** via Redis Pub/Sub, completely bypassing the LangGraph AI.
 - **Resolution**: Once the human support agent resolves the issue, the conversation is un-flagged, and control is returned to the AI assistant.
 
-### Rate Limiting & Concurrency
+### Rate Limiting
 
-![Rate Limiting Architecture](rate_limit.png)
-
-The application employs a two-tier protective system as shown in the architecture diagram above:
-1. **User Rate Limiting (Layer 1 - The Front Door):** Middleware tracking JWT tokens limits each user to a maximum of 10 messages per minute. Malicious spikes are blocked immediately with `429 Too Many Requests`.
-2. **Token Bucket LLM Queue (Layer 2 - The LLM Funnel):** To protect the Groq AI Free Tier from rate limit violations, the LangGraph execution is wrapped with a **Distributed Redis Token Bucket**. 
-   - **Strict Limits**: The bucket is configured with a Max Capacity of 25 Tokens and a Refill Rate of 25 Tokens / Minute.
-   - **Dynamic Backpressure**: No matter how many Uvicorn workers are running in the backend cluster, they must all acquire a token from the global Redis bucket before invoking the LLM.
-   - **Seamless Queueing**: If no token is available, the worker calculates the exact wait time required, streams a real-time `queue_wait` websocket event to the Chainlit frontend (displaying *"Waiting for capacity..."*), and sleeps asynchronously until refilled. No requests are lost, and the external API is perfectly protected.
+The application employs a rate limiting system to protect against spam:
+- **User Rate Limiting:** Middleware tracking JWT tokens limits each user to a maximum of 10 messages per minute. Malicious spikes are blocked immediately with `429 Too Many Requests`.
 
 ### Agent Descriptions
 
@@ -139,7 +133,7 @@ ecomm-cust-assit/
 ├── pyproject.toml                  # Base project metadata
 ├── pyproject.backend.toml          # Backend dependencies (uv)
 ├── pyproject.frontend.toml         # Frontend dependencies (uv)
-├── rate_limit.png                  # Concurrency & rate-limiting diagram
+
 ├── start.sh                        # Entrypoint script to start backend & frontend
 ├── uv.lock                         # Pinned dependency versions lockfile
 ├── .github/
@@ -174,8 +168,7 @@ ecomm-cust-assit/
 │   ├── middleware/
 │   │   ├── __init__.py
 │   │   ├── auth.py                 # Bearer JWT validator middleware
-│   │   ├── distributed_lock.py     # Redis Token Bucket & Semaphores
-│   │   └── rate_limit.py           # IP/user API rate limiting & LLM queueing
+│   │   └── rate_limit.py           # IP/user API rate limiting
 │   ├── rag/
 │   │   ├── __init__.py
 │   │   ├── image_retriever.py      # SigLIP + BM25 hybrid search processor

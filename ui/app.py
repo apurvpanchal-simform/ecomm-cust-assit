@@ -1324,6 +1324,3 @@ async def on_load_more_products(action: cl.Action):
     token = cl.user_session.get("jwt_token")
     offset = action.payload.get("offset", 0) if action.payload else 0
     await _handle_products(token, offset=offset)
-
-
-

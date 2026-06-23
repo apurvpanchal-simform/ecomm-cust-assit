@@ -1,5 +1,13 @@
 """
-Agent node that performs multi-modal product discovery using Hybrid Search and LLM reranking.
+Agent node that performs multimodal product discovery using Hybrid Search.
+
+`image_search_node` is the final step in the image search pipeline:
+  clip_embedder → image_search → cleanup
+
+It delegates the actual search to `ImageRetriever.search_and_rerank()`, which
+runs a multi-vector Qdrant Hybrid Search (Dense Image + Dense Text + Sparse BM25)
+followed by Reciprocal Rank Fusion (RRF).  The top results are formatted into
+a markdown message for the user.
 """
 
 import logging
@@ -16,20 +24,28 @@ logger = logging.getLogger(__name__)
 @observe(name="image_search_node")
 async def image_search_node(state: Any) -> dict:
     """
-    Executes a multimodal (Dense + Sparse) Hybrid Search against Qdrant, followed by LLM reranking.
+    Execute a multimodal Hybrid Search and format the top results as a markdown message.
 
-    This node acts as the visual and semantic product discovery specialist. When the supervisor
-    identifies a product search intent (via text, an uploaded image, or both), it routes to this node.
-    The node performs a multi-vector fusion query and then re-ranks the raw vector search results
-    using an LLM to ensure absolute relevance to the user's nuanced intent.
+    Reads embeddings, query text, image metadata, and price filters from the state,
+    delegates to `ImageRetriever.search_and_rerank()`, and builds a user-facing
+    product listing.
 
     Args:
-        state: The global AgentState containing embeddings, extracted text, and filters.
+        state: The global AgentState containing:
+            search_query      — text description of the desired product
+            image_embedding   — pre-computed SigLIP2 vector (from clip_embedder)
+            image_description — Azure CV caption / OCR text
+            image_tags        — Azure CV object tags
+            active_filters    — optional price range filters
+            image_base64      — used to determine if a real image was uploaded
 
     Returns:
-        A dictionary containing the `image_results` list, the generated `messages` array
-        with the markdown table, and the updated `executed_agents` list.
+        A dict with:
+            image_results    — list of raw product dicts returned by Qdrant
+            messages         — list containing the formatted AIMessage
+            executed_agents  — updated list marking 'image_search_agent' as done
     """
+    # ── 1. Extract inputs from state ──────────────────────────────────────────
     search_query = state.get("search_query")
     image_embedding = state.get("image_embedding")
     image_description = state.get("image_description")  # OCR from image_analyzer
@@ -38,14 +54,13 @@ async def image_search_node(state: Any) -> dict:
     has_real_image = bool(state.get("image_base64"))
 
     logger.info(
-        logger.info(
-            "🔍 Image Search Request -> Query: '%s', Filters: %s, Has Image: %s",
-            search_query,
-            active_filters,
-            has_real_image,
-        )
+        "🔍 Image Search Request -> Query: '%s', Filters: %s, Has Image: %s",
+        search_query,
+        active_filters,
+        has_real_image,
     )
 
+    # ── 2. Run Hybrid Search + RRF Fusion ─────────────────────────────────────
     retriever = ImageRetriever()
     final_results = await retriever.search_and_rerank(
         search_query=search_query,
@@ -56,6 +71,7 @@ async def image_search_node(state: Any) -> dict:
         has_real_image=has_real_image,
     )
 
+    # ── 3. Format results into a user-facing markdown message ─────────────────
     if not final_results:
         msg = "I couldn't find any products matching your search."
     else:

@@ -3,12 +3,10 @@ Utilities for generating and verifying JSON Web Tokens (JWT).
 """
 
 import datetime
-import os
 
 import jwt
 
-JWT_SECRET = os.getenv("JWT_SECRET_KEY")
-JWT_ALGORITHM = "HS256"
+from app.config import AUTH_CONFIG
 
 
 def generate_jwt(customer_id: str, email: str) -> str:
@@ -28,14 +26,14 @@ def generate_jwt(customer_id: str, email: str) -> str:
         "email": email,
         "exp": (
             datetime.datetime.now(datetime.timezone.utc)
-            + datetime.timedelta(hours=int(os.getenv("JWT_EXPIRATION_HOURS", "1")))
+            + datetime.timedelta(hours=AUTH_CONFIG.expiration_hours)
         ),
     }
 
     return jwt.encode(
         payload,
-        JWT_SECRET,
-        algorithm=JWT_ALGORITHM,
+        AUTH_CONFIG.secret_key,
+        algorithm=AUTH_CONFIG.algorithm,
     )
 
 
@@ -55,6 +53,6 @@ def verify_jwt(token: str) -> dict:
 
     return jwt.decode(
         token,
-        JWT_SECRET,
-        algorithms=[JWT_ALGORITHM],
+        AUTH_CONFIG.secret_key,
+        algorithms=[AUTH_CONFIG.algorithm],
     )

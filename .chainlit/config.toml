@@ -27,7 +27,7 @@ allow_origins = ["*"]
 unsafe_allow_html = true
 
 # Process and display mathematical expressions. This can clash with "$" characters in messages.
-latex = false
+latex = true
 
 # Enable rendering of user messages markdown
 user_message_markdown = true
@@ -52,7 +52,7 @@ favorites = false
 
 [features.slack]
 # Add emoji reaction when message is received (requires reactions:write OAuth scope)
-reaction_on_message_received = false
+# reaction_on_message_received = false
 
 # Authorize users to spontaneously upload files with messages
 [features.spontaneous_file_upload]
@@ -120,7 +120,7 @@ confirm_new_chat = true
 # description = ""
 
 # Chain of Thought (CoT) display mode. Can be "hidden", "tool_call" or "full".
-cot = "full"
+cot = "hidden"
 
 # Specify a CSS file that can be used to customize the user interface.
 # The CSS file can be served from the public directory or via an external link.
@@ -134,7 +134,7 @@ custom_css = "/public/custom.css"
 custom_js = "/public/custom.js"
 
 # The style of alert boxes. Can be "classic" or "modern".
-alert_style = "classic"
+alert_style = "modern"
 
 # Specify additional attributes for custom JS file
 # custom_js_attributes = "async type = \"module\""

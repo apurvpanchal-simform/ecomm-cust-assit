@@ -1,5 +1,9 @@
 """
-Fetch all orders belonging to a customer, with optional status and date filtering.
+Tool for fetching all orders belonging to a customer, with optional
+status and date-range filters.
+
+Called by the Order agent for list-style queries such as
+"show me my recent orders" or "do I have any cancelled orders?".
 """
 
 from typing import Annotated, Optional
@@ -42,6 +46,7 @@ async def get_customer_orders(
     """
     supabase = await get_supabase_client()
 
+    # ── 1. Build base query — select only the columns needed for OrderSummary ─
     query = supabase.table("orders").select("""
             id,
             status,
@@ -62,7 +67,9 @@ async def get_customer_orders(
             notes
             """).eq("customer_id", customer_id)
 
+    # ── 2. Apply optional filters ─────────────────────────────────────────────
     if status:
+        # Normalise hyphens to underscores so "in-transit" matches "in_transit"
         status = status.replace("-", "_").lower()
         query = query.eq("status", status)
     if from_date:
@@ -70,6 +77,7 @@ async def get_customer_orders(
     if to_date:
         query = query.lte("ordered_at", to_date)
 
+    # ── 3. Execute with ordering and limit ────────────────────────────────────
     result = await query.order("ordered_at", desc=True).limit(limit).execute()
 
     if not result.data:
@@ -82,6 +90,7 @@ async def get_customer_orders(
         )
         return response.model_dump(mode="json")
 
+    # ── 4. Map raw rows to typed OrderSummary objects ─────────────────────────
     orders = [
         OrderSummary(
             order_id=row["id"],

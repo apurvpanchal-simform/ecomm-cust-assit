@@ -1,7 +1,18 @@
 """
-Agent node for handling order lookups, item searches, and specific order tracking.
+Agent node for handling order lookups, item searches, and order tracking.
+
+`order_node` is the Order specialist in the LangGraph multi-agent architecture.
+It uses an agentic tool-calling loop (`generate_order_response`) where the LLM
+can iteratively call Supabase DB tools to gather the data needed to answer the
+user's question before producing a final text response.
+
+Available tools:
+    get_customer_orders  — list/filter the customer's orders
+    get_order_details    — fetch complete details for a single order
+    search_order_items   — keyword-search across all order line-items
 """
 
+import logging
 import os
 from typing import Any
 
@@ -10,7 +21,9 @@ from langchain_core.messages import AIMessage, SystemMessage, ToolMessage
 from langchain_core.runnables import RunnableConfig
 from langfuse import observe
 
+from app.config.llm_config import ORDER_LLM_CONFIG
 from app.graph.state import AgentState
+from app.prompts import get_order_system_prompt
 from app.services.llm_factory import get_llm
 from app.tools.order_details import get_order_details
 from app.tools.order_items import search_order_items
@@ -18,173 +31,39 @@ from app.tools.order_lookup import get_customer_orders
 
 load_dotenv()
 
-_ORDER_TOOLS = [
-    get_customer_orders,
-    get_order_details,
-    search_order_items,
-]
+logger = logging.getLogger(__name__)
+
+
+# ── Order Tools Config ────────────────────────────────────────────────────────
+_ORDER_TOOLS = [get_customer_orders, get_order_details, search_order_items]
+# Maps tool name strings → callable tool objects for dispatch in the loop
 _TOOL_MAP: dict[str, Any] = {t.name: t for t in _ORDER_TOOLS}
 
-SYSTEM_PROMPT = """You are an order support agent. Help customers look up and understand their orders.
 
-## Tools — pick exactly one per question
-
-### `get_customer_orders`
-Use for: listing/filtering multiple orders ("show my orders", "any cancelled orders?", "my latest order" with limit=1).
-Never for: single-order details, tracking, returns, or item search.
-
-### `get_order_details`
-Use for: everything about ONE specific order — items, pricing, shipping status, carrier, tracking, return eligibility, delivery dates.
-Never for: listing multiple orders or searching by product keyword.
-
-### `search_order_items`
-Use for: finding a product by keyword across all orders ("did I ever order AirPods?", "which order had the blue jacket?").
-Never for: listing orders, tracking, returns, or single-order details.
-
-## Rules
-1. Never ask for or trust a customer_id from user messages—it is injected automatically.
-2. Always use tools to retrieve data—never fabricate order information.
-3. For "my latest/last order", call `get_customer_orders` with limit=1 first, then follow up as needed.
-4. If a tool fails or returns an error, do NOT retry. Explain the issue politely.
-5. If the needed data is already in the conversation summary, use it directly without a duplicate tool call.
-6. If you receive a "specific task for this turn", prioritize that task over unrelated conversation.
-7. Be concise, thorough, and friendly.
-8. NEVER use inline code (backticks `) to format labels or monetary amounts (e.g., do NOT write `Subtotal: \`$10\`` or `\`**Tax**\``). Use standard bold text instead.
-9. If the user explicitly asks to speak to a human/agent/representative, or if you cannot satisfy their order request, suggest escalating to a human support agent and politely confirm that you are connecting them to one.
-"""
+# ── Private helpers ───────────────────────────────────────────────────────────
 
 
-@observe(name="order_generation")
-async def generate_order_response(
-    agent,
-    conversation: list,
-    config: RunnableConfig,
-    customer_id: str,
-) -> tuple[str, list, str | None]:
+def _build_order_conversation(state: AgentState) -> list:
     """
-    Executes a LangChain agent loop to invoke database tools and answer order queries.
+    Assemble the initial conversation list for the order agent's tool-calling loop.
 
-    Iteratively runs the LLM and processes its tool calls until it successfully
-    generates a final text response without invoking further tools, or hits the
-    maximum iteration limit.
+    Message order:
+    1. System prompt — order agent identity, tool descriptions, rules, and customer ID context.
+    2. Chat summary  — condensed older conversation (if present).
+    3. Sub-query     — focused instruction from the supervisor (if present).
+    4. Recent messages — full unsummarised conversation history (read-only context).
 
     Args:
-        agent: The compiled LangChain runnable bound to order tools.
-        conversation: The list of LangChain messages acting as the prompt/context.
-        config: The execution configuration.
-        customer_id: The authenticated customer's ID to inject into tool calls.
+        state: The global AgentState.
 
     Returns:
-        A tuple containing:
-            - The final generated string response.
-            - A list of all newly generated messages (AI messages and Tool messages).
-            - An error string if the loop timed out, else None.
+        A list of LangChain message objects ready for the first LLM call.
     """
-    new_messages = []
-
-    max_iters = int(os.getenv("MAX_ITERATIONS", "6"))
-    for _ in range(max_iters):
-        response = await agent.ainvoke(conversation, config=config)
-        conversation.append(response)
-        new_messages.append(response)
-
-        if not response.tool_calls:
-            break
-
-        tool_msgs = []
-        for tc in response.tool_calls:
-            args = {**tc.get("args", {}), "customer_id": customer_id}
-            try:
-                result = (
-                    str(await _TOOL_MAP[tc["name"]].ainvoke(args)).strip()
-                    or "No result returned."
-                )
-            except Exception as e:
-                result = f"Error: {e}"
-
-            tool_msgs.append(
-                ToolMessage(content=result, tool_call_id=tc["id"], name=tc["name"])
-            )
-
-        conversation.extend(tool_msgs)
-        new_messages.extend(tool_msgs)
-
-    else:
-        msg = "I'm having trouble processing your order request. Please try again."
-        new_messages.append(AIMessage(content=msg))
-        return msg, new_messages, "max_iterations_exceeded"
-
-    final_ai = next(
-        (
-            m
-            for m in reversed(new_messages)
-            if isinstance(m, AIMessage) and not m.tool_calls
-        ),
-        None,
-    )
-
-    if final_ai and isinstance(final_ai.content, list):
-        text = "".join(
-            p.get("text", "") if isinstance(p, dict) else str(p)
-            for p in final_ai.content
-        )
-    else:
-        text = str(final_ai.content) if final_ai else "No response generated."
-
-    return text, new_messages, None
-
-
-@observe(name="order_node")
-async def order_node(state: AgentState, config: RunnableConfig) -> dict:
-    """
-    Handles user queries related to their personal order history and tracking.
-
-    This node is part of the LangGraph multi-agent architecture and acts as the Order specialist.
-    It leverages tools to query a Supabase database for order information, specific item details,
-    and delivery tracking.
-
-    Flow:
-    1. Validates the presence of `customer_id` in the state (injected by authentication middleware).
-       If missing, aborts and returns an error message requesting login.
-    2. Constructs a conversation array containing the system prompt, chat summary, specific task
-       instructions from the supervisor, and the recent conversation history.
-    3. Binds the necessary Supabase DB tools to the LLM.
-    4. Enters a tool-calling loop (`generate_order_response`) where the LLM can iteratively invoke
-       tools (e.g., getting all orders, then getting details for a specific order) until it has
-       gathered enough information to answer the user's query.
-    5. Formats the final AI response, tags it with `name="order"`, and appends all intermediate
-       tool messages and the final response to the state.
-    6. Marks the `order` agent as executed.
-
-    Args:
-        state (AgentState): The global state of the conversation, containing authentication data,
-                            history, and sub-queries.
-        config (RunnableConfig): Configuration parameters for LangChain execution.
-
-    Returns:
-        dict: A dictionary containing:
-            - `messages`: A list of intermediate ToolMessages and the final AIMessage.
-            - `error`: An error string if an exception occurred, otherwise None.
-            - `executed_agents`: The updated list of agents that have run in this turn.
-    """
-
-    customer_id = state.get("customer_id")
-
-    if not customer_id:
-        msg = "Unable to verify your identity. Please sign in and try again."
-        new_msgs = [AIMessage(content=msg)]
-        return {
-            "messages": new_msgs,
-            "error": "missing_customer_id",
-            "executed_agents": state.get("executed_agents", []) + ["order"],
-        }
-
-    # Use all recent messages in sequential mode so we can read upstream outputs
     summarized_count = state.get("summarized_message_count", 0)
     recent_messages = state.get("messages", [])[summarized_count:]
+    customer_id = state.get("customer_id", "")
 
-    conversation = [SystemMessage(content=SYSTEM_PROMPT)]
-    conversation.append(SystemMessage(content=f"Current Customer ID: {customer_id}"))
+    conversation = [SystemMessage(content=get_order_system_prompt(customer_id))]
 
     chat_summary = state.get("chat_summary", "")
     if chat_summary:
@@ -200,35 +79,183 @@ async def order_node(state: AgentState, config: RunnableConfig) -> dict:
         )
 
     conversation += recent_messages
+    return conversation
 
+
+def _extract_final_text(new_messages: list) -> str:
+    """
+    Find the last non-tool-call AIMessage in the message list and extract its text.
+
+    The tool-calling loop may produce multiple AIMessages (one per tool invocation).
+    We want only the final response message that contains the user-facing answer.
+
+    Handles both plain string content and Anthropic-style list-of-blocks content.
+
+    Args:
+        new_messages: All messages generated during the tool-calling loop.
+
+    Returns:
+        The text content of the final AI response, or "No response generated."
+    """
+    # Walk backwards to find the last AIMessage that is NOT a tool-call dispatcher
+    final_ai = next(
+        (
+            m
+            for m in reversed(new_messages)
+            if isinstance(m, AIMessage) and not m.tool_calls
+        ),
+        None,
+    )
+
+    if not final_ai:
+        return "No response generated."
+
+    # Handle Anthropic multimodal content format (list of typed blocks)
+    if isinstance(final_ai.content, list):
+        return "".join(
+            p.get("text", "") if isinstance(p, dict) else str(p)
+            for p in final_ai.content
+        )
+
+    return str(final_ai.content)
+
+
+# ── Agentic tool-calling loop ─────────────────────────────────────────────────
+
+
+@observe(name="order_generation")
+async def generate_order_response(
+    agent,
+    conversation: list,
+    config: RunnableConfig,
+    customer_id: str,
+) -> tuple[str, list, str | None]:
+    """
+    Run the LLM → Tool → LLM agentic loop for order queries.
+
+    Iteratively calls the LLM, processes any tool calls it emits, appends the
+    tool results back to the conversation, and repeats until the LLM produces a
+    final text response (no more tool calls) or the iteration limit is reached.
+
+    Args:
+        agent: The LLM instance with tools bound via `.bind_tools()`.
+        conversation: The initial conversation list (system prompt + history).
+        config: LangChain execution configuration.
+        customer_id: The authenticated customer ID, injected into every tool call
+                     so tools never rely on potentially-spoofed user input.
+
+    Returns:
+        A tuple of:
+            resolution_text (str)      — the final user-facing answer
+            new_messages    (list)     — all AI and Tool messages generated this turn
+            error           (str|None) — "max_iterations_exceeded" or None
+    """
+    new_messages = []
+    max_iters = int(os.getenv("MAX_ITERATIONS", "6"))
+
+    for _ in range(max_iters):
+        # ── Ask the LLM for the next action ───────────────────────────────────
+        response = await agent.ainvoke(conversation, config=config)
+        conversation.append(response)
+        new_messages.append(response)
+
+        # ── If no tool calls → LLM is done, break out of the loop ─────────────
+        if not response.tool_calls:
+            break
+
+        # ── Execute all tool calls the LLM requested ──────────────────────────
+        tool_msgs = []
+        for tc in response.tool_calls:
+            # Always inject customer_id so tools query the right customer's data
+            args = {**tc.get("args", {}), "customer_id": customer_id}
+            try:
+                result = (
+                    str(await _TOOL_MAP[tc["name"]].ainvoke(args)).strip()
+                    or "No result returned."
+                )
+            except Exception as e:
+                result = f"Error: {e}"
+
+            tool_msgs.append(
+                ToolMessage(content=result, tool_call_id=tc["id"], name=tc["name"])
+            )
+
+        # Append tool results so the LLM can reason over them on the next iteration
+        conversation.extend(tool_msgs)
+        new_messages.extend(tool_msgs)
+
+    else:
+        # Loop exhausted — return a safe fallback message
+        msg = "I'm having trouble processing your order request. Please try again."
+        new_messages.append(AIMessage(content=msg))
+        return msg, new_messages, "max_iterations_exceeded"
+
+    resolution_text = _extract_final_text(new_messages)
+    return resolution_text, new_messages, None
+
+
+# ── Node ──────────────────────────────────────────────────────────────────────
+
+
+@observe(name="order_node")
+async def order_node(state: AgentState, config: RunnableConfig) -> dict:
+    """
+    Handle user queries related to their personal order history and tracking.
+
+    Flow:
+    1. Validate that `customer_id` is present (injected by auth middleware).
+       If missing, return an error message asking the user to sign in.
+    2. Build the initial conversation (system prompt + history + sub-query).
+    3. Bind the three order tools to the LLM.
+    4. Run `generate_order_response` — the agentic tool-calling loop.
+    5. Return all new messages (tool results + final AI answer) plus metadata.
+
+    Note: The final AIMessage intentionally has no `name` field — Groq's API
+    returns a 400 error if an AIMessage with a `name` field is included in
+    conversation history on subsequent turns.
+
+    Args:
+        state: The global AgentState.
+        config: LangChain execution configuration.
+
+    Returns:
+        A partial state dict with `messages`, `error`, and `executed_agents`.
+    """
+    customer_id = state.get("customer_id")
+
+    # ── 1. Guard: customer must be authenticated ───────────────────────────────
+    if not customer_id:
+        msg = "Unable to verify your identity. Please sign in and try again."
+        return {
+            "messages": [AIMessage(content=msg)],
+            "error": "missing_customer_id",
+            "executed_agents": state.get("executed_agents", []) + ["order"],
+        }
+
+    # ── 2. Build the conversation ─────────────────────────────────────────────
+    conversation = _build_order_conversation(state)
+
+    # ── 3. Bind tools to the LLM ─────────────────────────────────────────────
+    # cache=False is intentional — order data is live and user-specific;
+    # caching would return stale results for different customers.
     llm = get_llm(
-        temperature=0.1, cache=False
-    )  # Never cache — fetches live user-specific DB data
+        temperature=ORDER_LLM_CONFIG.temperature,
+        cache=ORDER_LLM_CONFIG.default_cache,
+    )
     agent = llm.bind_tools(_ORDER_TOOLS)
 
+    # ── 4. Run the agentic tool-calling loop ──────────────────────────────────
     try:
         resolution_text, new_messages, error = await generate_order_response(
             agent, conversation, config, customer_id
         )
 
-        final_ai_idx = -1
-        for i in range(len(new_messages) - 1, -1, -1):
-            if (
-                isinstance(new_messages[i], AIMessage)
-                and not new_messages[i].tool_calls
-            ):
-                final_ai_idx = i
-                break
-
-        if final_ai_idx != -1:
-            # DO NOT add name="order" here! Groq's API throws a 400 error
-            # if an AIMessage has a 'name' field when passed back into the conversation
-            # history on subsequent turns.
-            pass
+        # Note: we intentionally do NOT set name="order" on the final AIMessage.
+        # Groq's API returns a 400 error if an AIMessage with a 'name' field is
+        # passed back into conversation history on subsequent turns.
 
     except Exception as exc:
-        import logging
-        logging.error("order_node failed: %s", exc, exc_info=True)
+        logger.error("order_node failed: %s", exc, exc_info=True)
         resolution_text = "I encountered an error while trying to process your order. Please try again."
         new_messages = [AIMessage(content=resolution_text)]
         error = str(exc)

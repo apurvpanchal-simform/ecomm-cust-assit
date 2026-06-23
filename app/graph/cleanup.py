@@ -17,7 +17,6 @@ async def cleanup_node(state: Any) -> dict:
         "image_embedding": None,
         "image_results": None,
         "image_tags": None,
-        "image_azure_url": None,
         "image_is_safe": None,
         "image_safety_warning": None,
         "active_filters": None,

@@ -69,7 +69,7 @@ def test_faq_rag(data):
             _actual_output = new_messages[-1].content
         else:
             _actual_output = ""
-            
+
         return _retrieval_context, _actual_output
 
     retrieval_context, actual_output = asyncio.run(_run_rag())

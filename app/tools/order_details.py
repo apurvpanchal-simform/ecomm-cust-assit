@@ -1,5 +1,8 @@
 """
-Fetch full details for a single order — items, pricing, payment, shipping, and returns.
+Tool for fetching full details of a single order — items, pricing,
+payment method, shipping status, and return eligibility.
+
+Called by the Order agent when the user asks about a specific order ID.
 """
 
 from datetime import datetime, timezone
@@ -11,6 +14,39 @@ from langfuse import observe
 from app.db.supabase import get_supabase_client
 from app.schemas.agent import ToolNotFoundResponse
 from app.schemas.order import OrderDetail, OrderItem
+
+# ── Helper ────────────────────────────────────────────────────────────────────
+
+
+def _calculate_days_remaining(
+    deadline_str: str | None, return_eligible: bool
+) -> int | None:
+    """
+    Compute how many days remain until the return deadline.
+
+    Args:
+        deadline_str: ISO-8601 string for the return deadline (e.g. "2026-07-01T00:00:00Z"),
+                      or None if no deadline is set.
+        return_eligible: Whether the order is currently eligible for a return.
+
+    Returns:
+        Number of days remaining (minimum 0) if eligible and a valid deadline exists,
+        otherwise None.
+    """
+    if not deadline_str or not return_eligible:
+        return None
+
+    try:
+        deadline = datetime.fromisoformat(deadline_str)
+        now = datetime.now(timezone.utc)
+        delta = deadline - now
+        return max(0, delta.days)
+    except (ValueError, TypeError):
+        # Malformed deadline string — treat as unknown
+        return None
+
+
+# ── Tool ──────────────────────────────────────────────────────────────────────
 
 
 @tool
@@ -37,6 +73,8 @@ async def get_order_details(
     """
     supabase = await get_supabase_client()
 
+    # ── 1. Fetch order row from Supabase ─────────────────────────────────────
+    # Filter by both order_id AND customer_id to prevent cross-customer data leaks.
     result = await (
         supabase.table("orders")
         .select("*")
@@ -58,24 +96,20 @@ async def get_order_details(
 
     row = result.data[0]
 
+    # ── 2. Parse line items ───────────────────────────────────────────────────
     raw_items = row.get("items") or []
     items = [
         OrderItem(**item) if isinstance(item, dict) else OrderItem(name=str(item))
         for item in raw_items
     ]
 
-    # Calculate days remaining until return deadline
-    days_remaining = None
-    deadline_str = row.get("return_deadline")
-    if deadline_str and row.get("return_eligible"):
-        try:
-            deadline = datetime.fromisoformat(deadline_str)
-            now = datetime.now(timezone.utc)
-            delta = deadline - now
-            days_remaining = max(0, delta.days)
-        except (ValueError, TypeError):
-            days_remaining = None
+    # ── 3. Compute return deadline countdown ─────────────────────────────────
+    days_remaining = _calculate_days_remaining(
+        deadline_str=row.get("return_deadline"),
+        return_eligible=row.get("return_eligible", False),
+    )
 
+    # ── 4. Build and return the structured detail object ─────────────────────
     detail = OrderDetail(
         order_id=row["id"],
         customer_id=row["customer_id"],
