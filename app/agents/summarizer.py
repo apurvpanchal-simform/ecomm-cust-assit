@@ -11,7 +11,7 @@ from langfuse import observe
 from pydantic import BaseModel, Field
 
 from app.graph.state import AgentState
-from app.graph.utils import filter_tool_messages
+from app.graph.utils import filter_tool_messages, get_message_text
 from app.services.llm_factory import get_llm
 
 logger = logging.getLogger(__name__)
@@ -142,7 +142,7 @@ async def summarizer_node(state: AgentState, config: RunnableConfig) -> dict:
     unsummarized_messages = all_messages[summarized_count:]
     heuristic_escalate = None
     for msg in reversed(unsummarized_messages):
-        content = getattr(msg, "content", "") or ""
+        content = get_message_text(msg)
         msg_type = getattr(msg, "type", "")
         
         # 1. Did the system recently resolve it?
@@ -175,7 +175,7 @@ async def summarizer_node(state: AgentState, config: RunnableConfig) -> dict:
         if not has_active_issues:
             for msg in unsummarized_messages:
                 if getattr(msg, "type", "") == "ai":
-                    content_lower = (msg.content or "").lower()
+                    content_lower = get_message_text(msg).lower()
                     if any(phrase in content_lower for phrase in ["connecting you", "escalating this", "representative will be", "transferring you"]):
                         has_active_issues = True
                         break
@@ -194,9 +194,9 @@ async def summarizer_node(state: AgentState, config: RunnableConfig) -> dict:
         for msg in filter_tool_messages(messages_to_summarize):
             msg_type = getattr(msg, "type", "")
             role = "User" if msg_type == "human" else "Assistant"
-            content = msg.content
-            if content:
-                formatted_messages.append(f"{role}: {content}")
+            content_str = get_message_text(msg)
+            if content_str:
+                formatted_messages.append(f"{role}: {content_str}")
 
         new_content_text = "\n\n".join(formatted_messages)
 

@@ -9,7 +9,7 @@ from langchain_core.runnables import RunnableConfig
 from langfuse import observe
 
 from app.graph.state import AgentState
-from app.graph.utils import filter_tool_messages
+from app.graph.utils import filter_tool_messages, get_message_text
 from app.services.llm_factory import get_llm
 
 logger = logging.getLogger(__name__)
@@ -98,7 +98,7 @@ async def synthesizer_node(state: AgentState, config: RunnableConfig) -> dict:
         agent_responses_text = "Raw Agent Responses to combine:\n"
         for i, msg in enumerate(new_ai_messages):
             source = getattr(msg, "name", f"Agent_{i + 1}")
-            agent_responses_text += f"- [{source}]: {msg.content}\n"
+            agent_responses_text += f"- [{source}]: {get_message_text(msg)}\n"
 
         prompt_messages = [
             SystemMessage(content=SYNTHESIZER_PROMPT),

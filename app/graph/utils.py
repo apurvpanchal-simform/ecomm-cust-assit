@@ -44,3 +44,23 @@ def filter_tool_messages(messages: list) -> list:
         filtered.append(msg)
 
     return filtered
+
+
+def get_message_text(msg) -> str:
+    """Extract string content from a LangChain message, handling list/multimodal formats."""
+    if isinstance(msg, dict):
+        content = msg.get("content", "")
+    else:
+        content = getattr(msg, "content", "") or ""
+
+    if isinstance(content, list):
+        text_parts = []
+        for item in content:
+            if isinstance(item, dict):
+                if item.get("type") == "text":
+                    text_parts.append(item.get("text", ""))
+            elif isinstance(item, str):
+                text_parts.append(item)
+        return " ".join(text_parts)
+    return str(content)
+
