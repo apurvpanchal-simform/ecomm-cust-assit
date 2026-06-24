@@ -30,7 +30,7 @@ from app.schemas.summary import ActiveIssue, StructuredSummary
 from app.config.llm_config import SUMMARIZER_LLM_CONFIG
 from app.graph.state import AgentState
 from app.graph.utils import filter_ai_messages, filter_tool_messages, get_message_text
-from app.prompts import SUMMARIZER_PROMPT
+from app.prompts import get_summarizer_prompt, get_previous_summary_message, get_new_messages_input
 from app.services.llm_factory import get_llm
 
 logger = logging.getLogger(__name__)
@@ -430,16 +430,10 @@ async def summarizer_node(state: AgentState, config: RunnableConfig) -> dict:
     )
     structured_llm = llm.with_structured_output(StructuredSummary)
 
-    prompt_messages = [SystemMessage(content=SUMMARIZER_PROMPT)]
+    prompt_messages = [SystemMessage(content=get_summarizer_prompt())]
     if current_summary:
-        prompt_messages.append(
-            SystemMessage(content=f"Previous Summary:\n{current_summary}")
-        )
-    prompt_messages.append(
-        HumanMessage(
-            content=f"New messages to incorporate into the summary:\n{new_content_text}"
-        )
-    )
+        prompt_messages.append(get_previous_summary_message(current_summary))
+    prompt_messages.append(get_new_messages_input(new_content_text))
 
     try:
         structured_summary = await structured_llm.ainvoke(

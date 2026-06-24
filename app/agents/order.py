@@ -21,9 +21,9 @@ from langchain_core.messages import AIMessage, SystemMessage, ToolMessage
 from langchain_core.runnables import RunnableConfig
 from langfuse import observe
 
-from app.config.llm_config import ORDER_LLM_CONFIG
+from app.config import AGENT_CONFIG, ORDER_LLM_CONFIG
 from app.graph.state import AgentState
-from app.prompts import get_order_system_prompt
+from app.prompts import get_order_system_prompt, get_order_chat_summary_message, get_order_sub_query_message
 from app.services.llm_factory import get_llm
 from app.tools.order_details import get_order_details
 from app.tools.order_items import search_order_items
@@ -67,16 +67,12 @@ def _build_order_conversation(state: AgentState) -> list:
 
     chat_summary = state.get("chat_summary", "")
     if chat_summary:
-        conversation.append(
-            SystemMessage(content=f"Summary of earlier conversation:\n{chat_summary}")
-        )
+        conversation.append(get_order_chat_summary_message(chat_summary))
 
     sub_queries = state.get("sub_queries") or {}
     sub_query = sub_queries.get("order")
     if sub_query:
-        conversation.append(
-            SystemMessage(content=f"Your specific task for this turn: {sub_query}")
-        )
+        conversation.append(get_order_sub_query_message(sub_query))
 
     conversation += recent_messages
     return conversation
@@ -151,7 +147,7 @@ async def generate_order_response(
             error           (str|None) — "max_iterations_exceeded" or None
     """
     new_messages = []
-    max_iters = int(os.getenv("MAX_ITERATIONS", "6"))
+    max_iters = AGENT_CONFIG.max_iterations
 
     for _ in range(max_iters):
         # ── Ask the LLM for the next action ───────────────────────────────────

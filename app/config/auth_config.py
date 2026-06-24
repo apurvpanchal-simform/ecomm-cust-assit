@@ -1,9 +1,8 @@
-import os
-from dataclasses import dataclass
+from pydantic import Field
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
-@dataclass(frozen=True)
-class AuthConfig:
+class AuthConfig(BaseSettings):
     """Configuration for JWT authentication.
 
     Attributes:
@@ -12,9 +11,21 @@ class AuthConfig:
         expiration_hours: Expiration time of generated JWTs in hours.
     """
 
-    secret_key: str | None = os.getenv("JWT_SECRET_KEY")
-    algorithm: str = "HS256"
-    expiration_hours: int = int(os.getenv("JWT_EXPIRATION_HOURS", "1"))
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
+
+    secret_key: str | None = Field(
+        default=None, validation_alias="JWT_SECRET_KEY"
+    )
+    algorithm: str = Field(
+        default="HS256", validation_alias="JWT_ALGORITHM"
+    )
+    expiration_hours: int = Field(
+        default=1, validation_alias="JWT_EXPIRATION_HOURS"
+    )
 
 
 AUTH_CONFIG = AuthConfig()

@@ -12,7 +12,7 @@ from langchain_core.runnables import RunnableConfig
 from langfuse.langchain import CallbackHandler
 import redis.asyncio as async_redis_raw
 
-from app.middleware.rate_limit import check_rate_limit
+from app.middleware.rate_limit import check_chat_rate_limit
 from app.services.faq_response_cache import get_faq_response
 from app.services.jwt_auth import verify_jwt
 from app.services.support_handlers import (
@@ -174,6 +174,21 @@ async def chat_ws(
         pubsub, listener_task = await _subscribe_pubsub(
             pubsub_redis, conversation_id, websocket, app_state, role="customer"
         )
+        # Pre-create the conversation record so GET /chat/history returns data
+        # immediately (even before the first message is sent).  The title is a
+        # placeholder — it will be overwritten by the first real user message.
+        try:
+            async with app_state.pool.connection() as conn:
+                await conn.execute(
+                    """
+                    INSERT INTO customer_conversations (conversation_id, customer_id, title)
+                    VALUES (%s, %s, 'New Conversation')
+                    ON CONFLICT (conversation_id) DO NOTHING
+                    """,
+                    (conversation_id, customer_id),
+                )
+        except Exception as e:
+            logger.warning("Could not pre-create conversation record: %s", e)
 
     try:
         # ── 3. Main message loop — one iteration per user turn ─────────────────
@@ -214,9 +229,9 @@ async def chat_ws(
                 await websocket.send_json({"type": "error", "message": "Empty query."})
                 continue
 
-            # ── 3b. Rate limiting ──────────────────────────────────────────────
+            # ── 3b. Rate limiting (chat-only counter, isolated from REST polls) ──
             redis_client = getattr(app_state, "redis", None)
-            if await check_rate_limit(redis_client, customer_id):
+            if await check_chat_rate_limit(redis_client, customer_id):
                 await websocket.send_json(
                     {
                         "type": "error",

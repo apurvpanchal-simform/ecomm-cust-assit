@@ -73,7 +73,15 @@ async def image_search_node(state: Any) -> dict:
 
     # ── 3. Format results into a user-facing markdown message ─────────────────
     if not final_results:
-        msg = "I couldn't find any products matching your search."
+        query_hint = f' for **"{search_query}"**' if search_query else ""
+        msg = (
+            f"I couldn't find any matching products{query_hint} in our catalog. 😔\n\n"
+            "Here are a few things you can try:\n"
+            "- **Broaden your search** — try a more general term (e.g. *\"jacket\"* instead of *\"white jacket\"*)\n"
+            "- **Upload a photo** — if you have a reference image, I can use it to find visually similar products\n"
+            "- **Adjust filters** — if you set a price range, try widening it\n\n"
+            "Would you like me to help you search for something else?"
+        )
     else:
         msg = "Here are the top matches I found:\n\n"
         for idx, item in enumerate(final_results):

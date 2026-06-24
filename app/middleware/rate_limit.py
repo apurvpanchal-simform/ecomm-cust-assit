@@ -1,79 +1,144 @@
 """
 Rate limiting middleware for the chat API.
 
-Provides one mechanism:
-1. `check_rate_limit` / `rate_limit_customer` — per-customer request-per-minute
-   cap enforced via a Redis counter.  Customers exceeding the spam threshold
-   are temporarily banned for 24 hours.
+Provides two mechanisms:
+1. `check_chat_rate_limit` — per-customer **chat message** cap enforced via a
+   dedicated Redis key ``rate_limit:chat:{customer_id}``.  Only chat WebSocket
+   turns increment this counter, so UI background polls (conversation list,
+   order data) never consume from the chat quota.
+
+2. `rate_limit_customer` — FastAPI dependency used on REST endpoints.  Uses a
+   separate ``rate_limit:rest:{customer_id}`` key with a much higher cap so
+   normal UI polling is never blocked.
 """
 
 import logging
 
 from fastapi import Depends, HTTPException, Request
 
+from app.config import RATE_LIMIT_CONFIG
 from app.middleware.auth import get_current_customer
 
 logger = logging.getLogger(__name__)
 
+# REST endpoints get a much higher cap — they are background polls, not chat.
+_REST_LIMIT_MULTIPLIER = 10
 
-# ── Per-minute request-count rate limiter ─────────────────────────────────────
+
+# ── Shared ban-check helper ───────────────────────────────────────────────────
 
 
-async def check_rate_limit(redis_client, customer_id: str, limit: int = 10) -> bool:
+async def _check_ban(redis_client, customer_id: str) -> None:
+    """Raise 403 immediately if the customer is currently banned."""
+    ban_key = f"banned:{customer_id}"
+    if await redis_client.get(ban_key):
+        raise HTTPException(
+            status_code=403,
+            detail="You have been temporarily banned for spamming.",
+        )
+
+
+# ── Core counter helper ───────────────────────────────────────────────────────
+
+
+async def _increment_and_check(
+    redis_client,
+    counter_key: str,
+    customer_id: str,
+    limit: int,
+    scope: str,
+) -> bool:
     """
-    Check whether a customer has exceeded their per-minute request allowance.
-
-    Uses a simple Redis INCR + EXPIRE counter.  If the customer has already
-    been banned, a 403 is raised immediately.  If this request pushes their
-    count to ≥ 20 in a single minute (spam threshold), they are banned for
-    24 hours and a 403 is raised.
+    Increment the Redis counter for *counter_key* and enforce limits.
 
     Args:
-        redis_client: Async Redis client instance (may be None in tests).
-        customer_id: The authenticated customer's ID.
-        limit: Normal per-minute cap before a 429 is returned (default 10).
+        redis_client: Async Redis client.
+        counter_key:  The Redis key to increment (scoped per customer+type).
+        customer_id:  Used for ban-key construction.
+        limit:        Soft cap — returns True (rate-limited) when count >= limit.
+        scope:        Human-readable label used in log messages ('chat'/'rest').
 
     Returns:
-        True if the rate limit is exceeded (caller should return 429).
-        False if the request is within the limit.
+        True  — limit exceeded, caller should reject the request.
+        False — request is within the allowed limit.
+
+    Raises:
+        HTTPException 403: Customer is already banned OR just crossed spam threshold.
+    """
+    # ── 1. Reject immediately if already banned ───────────────────────────────
+    await _check_ban(redis_client, customer_id)
+
+    # ── 2. Increment the scoped per-minute counter (atomic pipeline) ──────────
+    async with redis_client.pipeline(transaction=True) as pipe:
+        pipe.incr(counter_key)
+        # nx=True: EXPIRE is only set on the very first write so the window
+        # starts fresh after 60 seconds, not on every request.
+        pipe.expire(counter_key, 60, nx=True)
+        results = await pipe.execute()
+
+    count = results[0]
+    logger.debug(
+        "[rate_limit] scope=%s | customer=%s | count=%d | limit=%d | spam_threshold=%d",
+        scope, customer_id, count, limit, RATE_LIMIT_CONFIG.spam_threshold,
+    )
+
+    # ── 3. Hard ban when spam threshold is crossed ────────────────────────────
+    if count >= RATE_LIMIT_CONFIG.spam_threshold:
+        ban_key = f"banned:{customer_id}"
+        await redis_client.setex(ban_key, RATE_LIMIT_CONFIG.ban_duration_seconds, "1")
+        logger.warning(
+            "[rate_limit] BANNED customer=%s after %d requests in 60s (scope=%s)",
+            customer_id, count, scope,
+        )
+        raise HTTPException(
+            status_code=403,
+            detail="You have been temporarily banned for spamming.",
+        )
+
+    # ── 4. Soft rate-limit signal (>= so limit=10 blocks on the 10th request) ─
+    if count >= limit:
+        logger.info(
+            "[rate_limit] LIMIT EXCEEDED scope=%s | customer=%s | count=%d >= limit=%d",
+            scope, customer_id, count, limit,
+        )
+        return True
+
+    return False
+
+
+# ── Public: chat WebSocket rate limiter ──────────────────────────────────────
+
+
+async def check_chat_rate_limit(redis_client, customer_id: str) -> bool:
+    """
+    Check whether a customer has exceeded their per-minute **chat** allowance.
+
+    Uses the key ``rate_limit:chat:{customer_id}`` — completely separate from
+    REST endpoint counters so background UI polls never eat into the chat quota.
+
+    Args:
+        redis_client: Async Redis client instance (may be None in local dev).
+        customer_id:  The authenticated customer's ID.
+
+    Returns:
+        True  — chat limit exceeded (caller should send a 429 error frame).
+        False — request is within the allowed chat limit.
 
     Raises:
         HTTPException 403: If the customer is currently banned.
-        HTTPException 403: If this request crosses the spam threshold (≥ 20/min).
     """
     if not redis_client:
-        # No Redis configured — skip rate limiting (e.g. local dev)
-        return False
+        return False  # No Redis — skip rate limiting in local dev
 
-    # ── 1. Check if this customer is already banned ───────────────────────────
-    ban_key = f"banned:{customer_id}"
-    is_banned = await redis_client.get(ban_key)
-    if is_banned:
-        raise HTTPException(
-            status_code=403,
-            detail="You have been temporarily banned for spamming.",
-        )
+    key = f"rate_limit:chat:{customer_id}"
+    return await _increment_and_check(
+        redis_client, key, customer_id,
+        limit=RATE_LIMIT_CONFIG.normal_limit,
+        scope="chat",
+    )
 
-    # ── 2. Increment the per-minute counter (atomic pipeline) ────────────────
-    key = f"rate_limit:{customer_id}"
-    async with redis_client.pipeline(transaction=True) as pipe:
-        pipe.incr(key)
-        # nx=True means EXPIRE is only set on first write (i.e. resets every minute)
-        pipe.expire(key, 60, nx=True)
-        results = await pipe.execute()
 
-    requests_in_minute = results[0]
-
-    # ── 3. Enforce spam ban (hard cap at 20 req/min) ─────────────────────────
-    if requests_in_minute >= 20:
-        await redis_client.setex(ban_key, 86400, "1")  # 86400s = 24 hours
-        raise HTTPException(
-            status_code=403,
-            detail="You have been temporarily banned for spamming.",
-        )
-
-    # ── 4. Return soft rate-limit signal (caller returns 429) ────────────────
-    return requests_in_minute > limit
+# ── Public: REST endpoint dependency ─────────────────────────────────────────
 
 
 async def rate_limit_customer(
@@ -81,25 +146,31 @@ async def rate_limit_customer(
     customer_id: str = Depends(get_current_customer),
 ) -> str:
     """
-    FastAPI dependency that enforces per-customer rate limiting on chat routes.
+    FastAPI dependency that enforces per-customer rate limiting on REST routes.
 
-    Reads the Redis client from `request.app.state.redis` and delegates to
-    `check_rate_limit`.  If the limit is exceeded, raises a 429 response.
+    Uses a separate ``rate_limit:rest:{customer_id}`` key with a much higher
+    cap (``normal_limit × 10``) so normal UI background polling is never
+    inadvertently blocked.
 
     Args:
-        request: The incoming FastAPI request (used to access app state).
+        request:     The incoming FastAPI request (used to access app state).
         customer_id: Extracted from the JWT by `get_current_customer`.
 
     Returns:
         The customer ID if the request is within the rate limit.
 
     Raises:
-        HTTPException 429: Too many requests — ask the user to wait.
-        HTTPException 403: Customer is banned (propagated from `check_rate_limit`).
+        HTTPException 429: Too many requests — ask the caller to back off.
+        HTTPException 403: Customer is banned.
     """
     redis_client = getattr(request.app.state, "redis", None)
+    if not redis_client:
+        return customer_id  # No Redis — skip rate limiting in local dev
 
-    if await check_rate_limit(redis_client, customer_id):
+    key = f"rate_limit:rest:{customer_id}"
+    rest_limit = RATE_LIMIT_CONFIG.normal_limit * _REST_LIMIT_MULTIPLIER
+
+    if await _increment_and_check(redis_client, key, customer_id, limit=rest_limit, scope="rest"):
         raise HTTPException(
             status_code=429,
             detail="Too Many Requests. Please wait a minute before trying again.",

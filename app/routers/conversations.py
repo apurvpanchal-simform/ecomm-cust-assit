@@ -116,13 +116,20 @@ async def get_chat_history(
     """
     # ── 1. Validate ownership ─────────────────────────────────────────────────
     async with request.app.state.pool.connection() as conn:
+        # First: does the conversation exist at all?
         cursor = await conn.execute(
-            "SELECT status FROM customer_conversations WHERE conversation_id = %s AND customer_id = %s",
-            (conversation_id, customer_id),
+            "SELECT customer_id, status FROM customer_conversations WHERE conversation_id = %s",
+            (conversation_id,),
         )
         row = await cursor.fetchone()
+
     if not row:
-        raise HTTPException(status_code=403, detail="Conversation not found")
+        raise HTTPException(status_code=404, detail="Conversation not found")
+
+    # Second: does it belong to this customer?
+    if row["customer_id"] != customer_id:
+        raise HTTPException(status_code=403, detail="Access denied")
+
 
     # ── 2. Read graph state ───────────────────────────────────────────────────
     config = {"configurable": {"thread_id": conversation_id}}
@@ -195,3 +202,39 @@ async def delete_conversation(
             )
         await conn.commit()
     return {"status": "deleted"}
+
+
+@router.post("/chat/conversations/{conversation_id}/typing/customer")
+async def customer_typing(
+    conversation_id: str,
+    request: Request,
+    customer_id: str = Depends(rate_limit_customer),
+):
+    """
+    Publish a customer typing event to the Redis support:events channel.
+    """
+    import json
+
+    # 1. Validate ownership
+    async with request.app.state.pool.connection() as conn:
+        cursor = await conn.execute(
+            "SELECT customer_id FROM customer_conversations WHERE conversation_id = %s",
+            (conversation_id,),
+        )
+        row = await cursor.fetchone()
+
+    if not row:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+
+    if row["customer_id"] != customer_id:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    # 2. Publish to Redis Pub/Sub support:events channel
+    redis_client = getattr(request.app.state, "redis", None)
+    if redis_client:
+        await redis_client.publish(
+            "support:events",
+            json.dumps({"event": "customer_typing", "conversation_id": conversation_id}),
+        )
+    return {"status": "ok"}
+

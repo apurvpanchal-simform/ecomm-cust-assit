@@ -20,7 +20,7 @@ from langfuse import observe
 from app.config.llm_config import FAQ_LLM_CONFIG
 from app.graph.state import AgentState
 from app.graph.utils import filter_tool_messages
-from app.prompts import get_faq_system_prompt
+from app.prompts import get_faq_system_prompt, get_faq_chat_summary_message, get_faq_sub_query_message
 from app.services.faq_response_cache import get_faq_response, set_faq_response
 from app.services.llm_factory import get_llm
 from app.tools.faq_search import search_faq
@@ -110,15 +110,11 @@ def _build_conversation(
     # Include rolling summary of older turns as background context
     chat_summary = state.get("chat_summary", "")
     if chat_summary:
-        conversation.append(
-            SystemMessage(content=f"Summary of earlier conversation:\n{chat_summary}")
-        )
+        conversation.append(get_faq_chat_summary_message(chat_summary))
 
     # Give the agent a focused task for this specific turn (set by supervisor)
     if sub_query:
-        conversation.append(
-            SystemMessage(content=f"Your specific task for this turn: {sub_query}")
-        )
+        conversation.append(get_faq_sub_query_message(sub_query))
 
     # Append recent conversation history (tool messages stripped to avoid provider errors)
     conversation += filter_tool_messages(recent_messages)

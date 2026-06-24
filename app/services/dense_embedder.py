@@ -16,6 +16,8 @@ import os
 from functools import lru_cache
 
 import torch
+
+from app.config import SEARCH_CONFIG
 from PIL import Image
 from transformers import AutoModel, AutoProcessor
 
@@ -39,8 +41,8 @@ def load_clip_model():
     Returns:
         A (model, processor) tuple ready for inference.
     """
-    model_name = os.getenv("CLIP_MODEL", "google/siglip-base-patch16-224")
-    hf_token = os.getenv("HF_TOKEN")
+    model_name = SEARCH_CONFIG.clip_model
+    hf_token = SEARCH_CONFIG.hf_token
 
     try:
         # Prefer the local cache to avoid network I/O in production

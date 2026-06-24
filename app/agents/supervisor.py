@@ -12,7 +12,13 @@ from langfuse import observe
 from app.config.llm_config import SUPERVISOR_LLM_CONFIG
 from app.graph.state import AgentState
 from app.graph.utils import filter_tool_messages
-from app.prompts import get_supervisor_system_prompt
+from app.prompts import (
+    get_supervisor_system_prompt,
+    get_supervisor_chat_summary_message,
+    get_image_context_message,
+    get_image_safety_warning_message,
+    get_latest_conversation_header,
+)
 from app.schemas.agent import Route
 from app.services.llm_factory import get_llm
 
@@ -47,51 +53,26 @@ def _handle_escalation() -> dict:
 
 
 def _append_chat_summary(supervisor_messages: list, state: AgentState) -> None:
-    """Inject the rolling chat summary as background context (capped to avoid prompt bloat)."""
+    """Inject the rolling chat summary as background context."""
     chat_summary = state.get("chat_summary", "")
-    if not chat_summary:
-        return
-    if len(chat_summary) > 800:
-        chat_summary = "[Truncated earlier summary]...\n" + chat_summary[-800:]
-    supervisor_messages.append(
-        SystemMessage(
-            content=f"Background Context (Older info, lower priority):\n{chat_summary}"
-        )
-    )
+    if chat_summary:
+        supervisor_messages.append(get_supervisor_chat_summary_message(chat_summary))
 
 
 def _append_image_context(supervisor_messages: list, state: AgentState) -> None:
     """Inject image description, tags, and safety warnings into the supervisor prompt."""
     image_desc = state.get("image_description")
     image_tags = state.get("image_tags")
+    image_safety_warning = state.get("image_safety_warning")
 
     if image_desc or image_tags:
-        analysis_text = []
-        if image_desc:
-            analysis_text.append(f"Description/OCR: {image_desc}")
-        if image_tags:
-            analysis_text.append(f"Tags: {', '.join(image_tags)}")
-
-        # Explicitly instruct the LLM to route safely when no warning is present,
-        # to prevent it from copying a blocked-image response from a previous turn.
-        if not state.get("image_safety_warning"):
-            analysis_text.append(
-                "\nIMPORTANT: This image is SAFE and approved. You MUST route to 'image_search_agent'. DO NOT apologize or claim it was blocked due to policy."
-            )
-
+        is_safe = not image_safety_warning
         supervisor_messages.append(
-            SystemMessage(
-                content="The user uploaded an image. Image Analysis:\n"
-                + "\n".join(analysis_text)
-            )
+            get_image_context_message(image_desc, image_tags, is_safe)
         )
 
-    # Ephemeral safety warning from image_analyzer (only set for THIS turn)
-    image_safety_warning = state.get("image_safety_warning")
     if image_safety_warning:
-        supervisor_messages.append(
-            SystemMessage(content=f"SYSTEM: {image_safety_warning}")
-        )
+        supervisor_messages.append(get_image_safety_warning_message(image_safety_warning))
 
 
 def _append_recent_messages(
@@ -102,9 +83,7 @@ def _append_recent_messages(
     recent_messages = filter_tool_messages(messages[summarized_count:])
 
     if recent_messages:
-        supervisor_messages.append(
-            SystemMessage(content="Latest Conversation (Highest priority):")
-        )
+        supervisor_messages.append(get_latest_conversation_header())
         supervisor_messages.extend(recent_messages)
 
 

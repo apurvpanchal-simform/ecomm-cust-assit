@@ -279,18 +279,87 @@ class ImageRetriever:
             except Exception as e:
                 logger.warning("Failed to log sparse results: %s", e)
 
+    async def _fetch_dense_product_ids(
+        self,
+        image_vector: list[float] | None,
+        text_vector: list[float] | None,
+        has_real_image: bool,
+        filters: "Filter | None",
+    ) -> set[str]:
+        """
+        Collect the set of product IDs returned by any dense modality search.
+
+        This is used after RRF to cross-reference results — any product that
+        only appeared via sparse BM25 (keyword match) and NOT via any dense
+        semantic vector is excluded when at least one dense result exists.
+        This prevents irrelevant keyword-only items like "White Sneakers" from
+        surfacing for the query "white jacket" when no white jacket exists.
+
+        Each modality uses its own score threshold:
+        - Text vectors use ``text_score_threshold``
+        - Image vectors use ``image_score_threshold``
+
+        Args:
+            image_vector: Dense SigLIP2 image embedding (or None).
+            text_vector: Dense SigLIP2 text embedding (or None).
+            has_real_image: Whether a real image was uploaded.
+            filters: Optional price filter.
+
+        Returns:
+            Set of product_id strings from dense result payloads.
+        """
+        dense_ids: set[str] = set()
+
+        # (vector, qdrant_namespace, score_threshold)
+        queries: list[tuple[list[float], str, float]] = []
+        if text_vector:
+            queries.append((text_vector, "", SEARCH_CONFIG.text_score_threshold))
+        if image_vector and has_real_image:
+            queries.append((image_vector, "", SEARCH_CONFIG.image_score_threshold))
+
+        for vec, namespace, threshold in queries:
+            try:
+                res = await self.qdrant.query_points(
+                    collection_name="product_images",
+                    query=vec,
+                    using=namespace,
+                    limit=SEARCH_CONFIG.prefetch_limit,
+                    query_filter=filters,
+                    with_payload=True,
+                    score_threshold=threshold,
+                )
+                for p in res.points:
+                    pid = (p.payload or {}).get("product_id")
+                    if pid:
+                        dense_ids.add(str(pid))
+            except Exception as e:
+                logger.warning("Failed to fetch dense product IDs: %s", e)
+
+        return dense_ids
+
     async def _execute_fusion_search(
         self,
         prefetch_queries: list[Prefetch],
+        dense_product_ids: set[str],
     ) -> list[dict]:
         """
-        Execute the Qdrant RRF Fusion query and return the top-3 candidates.
+        Execute the Qdrant RRF Fusion query and return the top candidates.
 
         Merges all Prefetch candidate sets using Reciprocal Rank Fusion (RRF),
         which rewards items that rank highly in multiple modalities.
 
+        After fusion, two quality gates are applied in order:
+        1. **Dense cross-reference** — when dense results exist, any candidate
+           that only came from the sparse BM25 search (pure keyword match) is
+           dropped.  This prevents "White Sneakers" from polluting a search for
+           "white jacket" because the word "white" appears in both titles.
+        2. **RRF score threshold** — candidates below `rrf_score_threshold`
+           are discarded even if they passed the dense cross-reference.
+
         Args:
             prefetch_queries: List of Prefetch objects built by `_build_prefetch_queries`.
+            dense_product_ids: Set of product IDs returned by at least one dense
+                modality search.  Pass an empty set to skip the cross-reference.
 
         Returns:
             A list of product payload dicts with an added 'score' field,
@@ -315,7 +384,7 @@ class ImageRetriever:
             item = {**payload, "score": round(r.score, 4)}
             candidates.append(item)
 
-        # Log pre-rerank results for observability
+        # Log pre-filter results for observability
         log_msg = "\n========== RAW QDRANT RESULTS (PRE-RERANK) ==========\n"
         if not candidates:
             log_msg += "No results found.\n"
@@ -328,7 +397,38 @@ class ImageRetriever:
         log_msg += "=======================================================\n"
         logger.info(log_msg)
 
-        return candidates
+        # ── Gate 1: Dense cross-reference ─────────────────────────────────────
+        # When dense results exist, drop any candidate that only arrived via
+        # sparse BM25 keyword matching.  A keyword match on "white" should not
+        # surface sneakers or mattresses for the query "white jacket".
+        if dense_product_ids:
+            before = len(candidates)
+            candidates = [
+                c for c in candidates
+                if str(c.get("product_id", "")) in dense_product_ids
+            ]
+            dropped = before - len(candidates)
+            if dropped:
+                logger.info(
+                    "🔍 Dense cross-reference removed %d pure-BM25 candidate(s) "
+                    "not present in any dense result set.",
+                    dropped,
+                )
+
+        # ── Gate 2: RRF confidence threshold ──────────────────────────────────
+        filtered = [c for c in candidates if c.get("score", 0) >= SEARCH_CONFIG.rrf_score_threshold]
+        discarded = len(candidates) - len(filtered)
+        if discarded:
+            logger.info(
+                "🚫 RRF threshold (%.4f) filtered out %d / %d candidate(s).",
+                SEARCH_CONFIG.rrf_score_threshold,
+                discarded,
+                len(candidates),
+            )
+        if not filtered:
+            logger.info("⚠️ All RRF candidates fell below relevance gates. Returning no results.")
+
+        return filtered
 
     # ── Public entry point ────────────────────────────────────────────────────
 
@@ -398,8 +498,23 @@ class ImageRetriever:
                 filters=filters,
             )
 
-            # ── 5. Execute fusion search and return results ───────────────────
-            return await self._execute_fusion_search(prefetch_queries)
+            # ── 5. Collect dense product IDs for post-RRF cross-reference ─────
+            # Fetch the product IDs that appear in any dense modality so we can
+            # strip out pure BM25 keyword matches after fusion (e.g. "White
+            # Sneakers" matching the word "white" in a "white jacket" search).
+            dense_product_ids = await self._fetch_dense_product_ids(
+                image_vector=image_vector,
+                text_vector=text_vector,
+                has_real_image=has_real_image,
+                filters=filters,
+            )
+            logger.info(
+                "📦 Dense candidate pool: %d product(s) eligible for cross-reference.",
+                len(dense_product_ids),
+            )
+
+            # ── 6. Execute fusion search and return results ───────────────────
+            return await self._execute_fusion_search(prefetch_queries, dense_product_ids)
 
         except Exception as e:
             logger.exception("Image search error: %s", e)

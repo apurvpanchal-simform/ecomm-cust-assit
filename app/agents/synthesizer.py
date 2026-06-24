@@ -19,7 +19,7 @@ from langfuse import observe
 from app.config.llm_config import SYNTHESIZER_LLM_CONFIG
 from app.graph.state import AgentState
 from app.graph.utils import filter_ai_messages, filter_tool_messages, get_message_text
-from app.prompts import SYNTHESIZER_PROMPT
+from app.prompts import get_synthesizer_system_message, get_agent_responses_message
 from app.services.llm_factory import get_llm
 
 logger = logging.getLogger(__name__)
@@ -78,15 +78,9 @@ async def synthesizer_node(state: AgentState, config: RunnableConfig) -> dict:
             cache=False if has_image_context else SYNTHESIZER_LLM_CONFIG.default_cache,
         )
 
-        # Format all agent responses into a single block for the LLM
-        agent_responses_text = "Raw Agent Responses to combine:\n"
-        for i, msg in enumerate(new_ai_messages):
-            source = getattr(msg, "name", f"Agent_{i + 1}")
-            agent_responses_text += f"- [{source}]: {get_message_text(msg)}\n"
-
         prompt_messages = [
-            SystemMessage(content=SYNTHESIZER_PROMPT),
-            HumanMessage(content=agent_responses_text),
+            get_synthesizer_system_message(),
+            get_agent_responses_message(new_ai_messages),
         ]
 
         response = await llm.ainvoke(prompt_messages, config=config)
