@@ -17,10 +17,9 @@ def get_qdrant_client() -> AsyncQdrantClient:
     return AsyncQdrantClient(url=qdrant_url, api_key=qdrant_api_key, timeout=30)
 
 
-async def ensure_faq_collection(recreate: bool = False):
+async def ensure_faq_collection(recreate: bool = False, collection_name: str = "ecommerce-knowledge-markdown"):
     """Ensure the FAQ knowledge collection exists."""
     client = get_qdrant_client()
-    collection_name = "ecommerce-knowledge"
 
     if recreate:
         try:
@@ -33,6 +32,11 @@ async def ensure_faq_collection(recreate: bool = False):
             collection_name=collection_name,
             vectors_config=VectorParams(size=768, distance=Distance.COSINE),
         )
+    
+    # Always ensure the payload index exists for fast lookups
+    await client.create_payload_index(
+        collection_name, "source_file", PayloadSchemaType.KEYWORD
+    )
 
 
 async def ensure_product_images_collection(recreate: bool = False):

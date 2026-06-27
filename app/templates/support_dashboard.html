@@ -1159,6 +1159,9 @@ document.addEventListener("DOMContentLoaded", () => {
                 if (data.event === "customer_online") {
                     if (activeConversationId === data.conversation_id) {
                         setCustomerPresence(true);
+                        const el = document.getElementById("messagesContainer");
+                        el.innerHTML += `<div class="system-message" style="text-align:center;color:var(--text-muted);font-size:0.85rem;margin:10px;font-style:italic;padding:6px 0;border-top:1px solid var(--border-glass);">🟢 Customer has connected</div>`;
+                        el.scrollTop = el.scrollHeight;
                     }
                 }
 

@@ -441,3 +441,10 @@ However, some sellers may have **more generous return policies** than our standa
 
 *End of FAQ: Returns, Exchanges & Cancellations*
 *For returns support, email returns@ourstore.com or call 1800-XXX-XXXX (Mon–Sat, 9am–8pm IST).*
+
+---
+
+### Q8.2: Can I track my return pickup agent?
+
+**Answer:**
+Yes, once the pickup agent is dispatched (usually on the morning of the pickup day), you will receive an SMS with a live tracking link and the agent's contact number so you can coordinate the exact time.

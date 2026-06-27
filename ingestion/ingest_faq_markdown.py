@@ -10,7 +10,7 @@ import sys
 import uuid
 from pathlib import Path
 
-from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain_text_splitters import MarkdownHeaderTextSplitter, RecursiveCharacterTextSplitter
 from qdrant_client import models
 from qdrant_client.http.models import PointStruct
 
@@ -20,8 +20,12 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from app.rag.retriever import FAQRetriever
 from ingestion.utils import setup_database_schema
 
-# ── Chunking config ────────────────────────────────────────────────────────────
-# Industry standard ideal chunk size and overlap for dense embeddings
+headers_to_split_on = [
+    ("##", "Section"),
+    ("###", "Question"),
+]
+markdown_splitter = MarkdownHeaderTextSplitter(headers_to_split_on=headers_to_split_on)
+
 CHUNK_SIZE = 1000
 CHUNK_OVERLAP = 200
 SEPARATORS = ["\n\n", "\n", " ", ""]
@@ -71,7 +75,7 @@ def _load_markdown_documents(source_dir: Path) -> list[dict]:
 
 def _chunk_documents(documents: list[dict]) -> list[dict]:
     """
-    Chunk loaded documents using RecursiveCharacterTextSplitter, inject context, and hash.
+    Chunk loaded documents using MarkdownHeaderTextSplitter and RecursiveCharacterTextSplitter, inject context, and hash.
 
     Args:
         documents: List of loaded document dictionaries.
@@ -81,13 +85,24 @@ def _chunk_documents(documents: list[dict]) -> list[dict]:
     """
     all_chunks: list[dict] = []
     for doc in documents:
-        sub_texts = char_splitter.split_text(doc["content"])
-        for sub_text in sub_texts:
+        # 1. Semantic Split
+        semantic_splits = markdown_splitter.split_text(doc["content"])
+        
+        # 2. Safety Split
+        safety_splits = char_splitter.split_documents(semantic_splits)
+        
+        for split in safety_splits:
+            section = split.metadata.get("Section", "General")
+            question = split.metadata.get("Question", "")
+            
             # Context Enrichment
             enriched_text = f"Document: {doc['title']}\n"
             if doc["tags"]:
                 enriched_text += f"Tags: {doc['tags']}\n"
-            enriched_text += f"---\n{sub_text.strip()}"
+            enriched_text += f"Section: {section}\n"
+            if question:
+                enriched_text += f"Question: {question}\n"
+            enriched_text += f"---\n{split.page_content.strip()}"
             
             # Chunk Hashing
             chunk_hash = hashlib.md5(enriched_text.encode("utf-8")).hexdigest()
@@ -276,7 +291,7 @@ async def ingest_documents() -> None:
     setup_database_schema()
 
     # ── 2. Initialize Qdrant collection ───────────────────────────────────────
-    store = FAQRetriever()
+    store = FAQRetriever(collection_name="ecommerce-knowledge-markdown")
     source_dir = Path("data/faq_knowledge")
     await store.initialize(recreate=False)
 

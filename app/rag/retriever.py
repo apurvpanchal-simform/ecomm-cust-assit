@@ -19,7 +19,7 @@ class FAQRetriever:
     Retrieves FAQ chunks from a Qdrant vector collection using semantic search.
 
     Embeds the query with the configured text embedding model and runs a
-    nearest-neighbour search against the `ecommerce-knowledge` collection.
+    nearest-neighbour search against the `ecommerce-knowledge-markdown` collection.
 
     Typical flow:
         retriever = FAQRetriever()
@@ -27,8 +27,8 @@ class FAQRetriever:
         # → list of dicts with 'content', 'source_file', and 'score' keys
     """
 
-    def __init__(self):
-        self.collection_name = "ecommerce-knowledge"
+    def __init__(self, collection_name: str = "ecommerce-knowledge-markdown"):
+        self.collection_name = collection_name
         self.client = get_qdrant_client()
         # Uses the default 768-dimension embedding model (OpenRouter with Gemini fallback)
         self.embeddings = get_embeddings()
@@ -45,7 +45,7 @@ class FAQRetriever:
             recreate: If True, drop and recreate the collection.
                       If False (default), only create it if it does not exist.
         """
-        await ensure_faq_collection(recreate=recreate)
+        await ensure_faq_collection(recreate=recreate, collection_name=self.collection_name)
 
     async def vector_search(self, query: str, top_k: int | None = None) -> list[dict]:
         """
