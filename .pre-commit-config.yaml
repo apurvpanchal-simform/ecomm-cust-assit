@@ -1,0 +1,9 @@
+repos:
+  - repo: local
+    hooks:
+      - id: trivy-fs
+        name: Trivy Filesystem Scan
+        entry: trivy fs --scanners vuln,secret,misconfig --format template --template "@.trivy/html.tpl" -o report.html .
+        language: system
+        pass_filenames: false
+        stages: [pre-commit]
